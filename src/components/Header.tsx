@@ -1,4 +1,3 @@
-
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -12,20 +11,41 @@ interface HeaderProps {
 
 export const Header = ({ user, onLogin, onLogout }: HeaderProps) => {
   return (
-    <header className="border-b border-dark-surface/50 bg-dark-bg/80 backdrop-blur-sm sticky top-0 z-50">
+    <header className="bg-gradient-to-r from-neon-blue/30 to-neon-purple/30 backdrop-blur-md shadow-lg border-b border-white/10 sticky top-0 z-50">
       <div className="container mx-auto px-6 py-4">
         <div className="flex items-center justify-between">
-          {/* Logo */}
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-gradient-to-r from-neon-blue to-neon-purple rounded-lg">
-              <Zap className="h-6 w-6 text-white" />
+          {/* Logo and Brand */}
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-r from-neon-blue to-neon-purple rounded-lg shadow">
+              <Zap className="h-6 w-6 text-white animate-pulse" />
             </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-neon-blue to-neon-purple bg-clip-text text-transparent">
-              Clip-It-Now
+            <span className="font-bold text-2xl text-neon-blue bg-gradient-to-r from-neon-blue via-neon-purple to-neon-pink bg-clip-text text-transparent select-none">
+              ClipWave
             </span>
+            <span className="ml-2 px-2 py-0.5 bg-neon-pink/20 text-neon-pink text-xs rounded-full font-semibold tracking-wide animate-pulse">Beta</span>
           </div>
 
-          {/* User Menu */}
+          {/* Navigation Links */}
+          <nav className="hidden md:flex gap-8 relative">
+            {[
+              { label: 'Features', href: '#features', color: 'neon-blue' },
+              { label: 'Pricing', href: '#pricing', color: 'neon-purple' },
+              { label: 'About', href: '#about', color: 'neon-pink' },
+            ].map((link) => (
+              <a
+                key={link.label}
+                href={link.href}
+                className={`relative group text-white font-medium transition`}
+              >
+                {link.label}
+                <span
+                  className={`absolute left-0 -bottom-1 h-0.5 w-0 bg-${link.color} transition-all duration-300 group-hover:w-full`}
+                />
+              </a>
+            ))}
+          </nav>
+
+          {/* User Menu or Sign In */}
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -71,7 +91,7 @@ export const Header = ({ user, onLogin, onLogout }: HeaderProps) => {
           ) : (
             <Button 
               onClick={onLogin}
-              className="bg-gradient-to-r from-neon-blue to-neon-purple hover:from-neon-purple hover:to-neon-pink transition-all duration-300"
+              className="bg-gradient-to-r from-neon-blue to-neon-purple hover:from-neon-purple hover:to-neon-pink text-white font-semibold px-6 py-2 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-neon-blue/25"
             >
               Sign In
             </Button>

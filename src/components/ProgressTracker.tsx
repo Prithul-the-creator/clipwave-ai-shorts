@@ -1,25 +1,8 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Download, FileText, Scissors, Video, CheckCircle } from 'lucide-react';
-import { useEffect, useState } from 'react';
-
-interface Job {
-  id: string;
-  title: string;
-  thumbnail: string;
-  status: 'processing' | 'completed' | 'failed';
-  progress: number;
-  clips: Array<{
-    id: string;
-    title: string;
-    duration: string;
-    timeframe: string;
-    url: string;
-  }>;
-  createdAt: Date;
-}
+import { Job } from '@/lib/api';
 
 interface ProgressTrackerProps {
   job: Job;
@@ -33,31 +16,10 @@ const steps = [
 ];
 
 export const ProgressTracker = ({ job }: ProgressTrackerProps) => {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [progress, setProgress] = useState(job.progress);
+  const progress = job.progress;
 
-  useEffect(() => {
-    // Simulate progress updates
-    const interval = setInterval(() => {
-      setProgress(prev => {
-        const newProgress = Math.min(prev + Math.random() * 5, 100);
-        
-        // Update current step based on progress
-        const step = steps.find(s => newProgress >= s.range[0] && newProgress < s.range[1]);
-        if (step) {
-          setCurrentStep(step.id);
-        }
-        
-        return newProgress;
-      });
-    }, 1000);
-
-    if (progress >= 100) {
-      clearInterval(interval);
-    }
-
-    return () => clearInterval(interval);
-  }, [progress]);
+  // Determine current step based on progress
+  const currentStep = steps.find(s => progress >= s.range[0] && progress < s.range[1])?.id || 1;
 
   return (
     <Card className="glass-effect border-0 shadow-2xl">
@@ -82,11 +44,18 @@ export const ProgressTracker = ({ job }: ProgressTrackerProps) => {
           </Progress>
         </div>
 
+        {/* Current Step Display */}
+        <div className="text-center py-4">
+          <p className="text-neon-blue font-medium">
+            {job.current_step}
+          </p>
+        </div>
+
         {/* Step by Step Progress */}
         <div className="space-y-4">
           {steps.map((step) => {
             const isActive = currentStep === step.id;
-            const isCompleted = progress > step.range[1];
+            const isCompleted = progress >= step.range[1];
             const stepProgress = Math.max(0, Math.min(100, 
               ((progress - step.range[0]) / (step.range[1] - step.range[0])) * 100
             ));
