@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Trash2, Clock, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Trash2, Clock, CheckCircle, AlertCircle, Loader2, Play } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Job } from '@/lib/api';
 
@@ -75,76 +75,97 @@ export const JobQueue = ({ jobs, currentJob, onJobSelect, onJobDelete, loading =
               <p className="text-sm">Submit a YouTube URL to get started</p>
             </div>
           ) : (
-            jobs.map((job) => (
-              <div
-                key={job.id}
-                className={`p-4 rounded-lg cursor-pointer transition-all duration-200 ${
-                  currentJob?.id === job.id
-                    ? 'bg-neon-blue/10 border border-neon-blue/30'
-                    : 'bg-dark-card/50 hover:bg-dark-card/70 border border-transparent'
-                }`}
-                onClick={() => onJobSelect(job)}
-              >
-                <div className="flex items-start gap-3">
-                  <img
-                    src={getJobThumbnail(job)}
-                    alt={getJobTitle(job)}
-                    className="w-16 h-12 rounded object-cover flex-shrink-0"
-                  />
+            jobs.map((job) => {
+              const isCurrentJob = currentJob?.id === job.id;
+              const isCompleted = job.status === 'completed';
+              
+              return (
+                <div
+                  key={job.id}
+                  className={`p-4 rounded-lg cursor-pointer transition-all duration-200 relative ${
+                    isCurrentJob
+                      ? 'bg-neon-blue/10 border-2 border-neon-blue/50 shadow-lg shadow-neon-blue/20'
+                      : 'bg-dark-card/50 hover:bg-dark-card/70 border border-transparent hover:border-neon-blue/30'
+                  }`}
+                  onClick={() => onJobSelect(job)}
+                >
+                  {/* Active indicator for current job */}
+                  {isCurrentJob && (
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-neon-blue rounded-full animate-pulse" />
+                  )}
                   
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-medium text-sm truncate text-foreground">
-                        {getJobTitle(job)}
-                      </h3>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onJobDelete(job.id);
-                        }}
-                        className="text-muted-foreground hover:text-red-400 p-1 h-auto"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+                  <div className="flex items-start gap-3">
+                    <div className="relative">
+                      <img
+                        src={getJobThumbnail(job)}
+                        alt={getJobTitle(job)}
+                        className={`w-16 h-12 rounded object-cover flex-shrink-0 ${
+                          isCurrentJob ? 'ring-2 ring-neon-blue/50' : ''
+                        }`}
+                      />
+                      {isCompleted && isCurrentJob && (
+                        <div className="absolute inset-0 bg-black/50 rounded flex items-center justify-center">
+                          <Play className="h-4 w-4 text-white" />
+                        </div>
+                      )}
                     </div>
                     
-                    <div className="flex items-center gap-2 mt-2">
-                      {getStatusIcon(job.status)}
-                      <Badge className={`text-xs ${getStatusColor(job.status)}`}>
-                        {job.status}
-                      </Badge>
-                    </div>
-
-                    {job.status === 'processing' && (
-                      <div className="mt-2">
-                        <Progress value={job.progress} className="h-1" />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {job.progress}% complete
-                        </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className={`font-medium text-sm truncate ${
+                          isCurrentJob ? 'text-neon-blue' : 'text-foreground'
+                        }`}>
+                          {getJobTitle(job)}
+                        </h3>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onJobDelete(job.id);
+                          }}
+                          className="text-muted-foreground hover:text-red-400 p-1 h-auto"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
                       </div>
-                    )}
+                      
+                      <div className="flex items-center gap-2 mt-2">
+                        {getStatusIcon(job.status)}
+                        <Badge className={`text-xs ${getStatusColor(job.status)}`}>
+                          {job.status}
+                        </Badge>
+                      </div>
 
-                    {job.status === 'completed' && (
+                      {job.status === 'processing' && (
+                        <div className="mt-2">
+                          <Progress value={job.progress} className="h-1" />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {job.progress}% complete
+                          </p>
+                        </div>
+                      )}
+
+                      {job.status === 'completed' && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {job.clips.length} clips generated
+                        </p>
+                      )}
+
+                      {job.status === 'failed' && job.error && (
+                        <p className="text-xs text-red-400 mt-1 truncate">
+                          {job.error}
+                        </p>
+                      )}
+                      
                       <p className="text-xs text-muted-foreground mt-1">
-                        {job.clips.length} clips generated
+                        {formatDistanceToNow(new Date(job.created_at), { addSuffix: true })}
                       </p>
-                    )}
-
-                    {job.status === 'failed' && job.error && (
-                      <p className="text-xs text-red-400 mt-1 truncate">
-                        {job.error}
-                      </p>
-                    )}
-                    
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {formatDistanceToNow(new Date(job.created_at), { addSuffix: true })}
-                    </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </CardContent>

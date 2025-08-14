@@ -64,7 +64,12 @@ export const Dashboard = ({ user }: DashboardProps) => {
   };
 
   const handleJobSelect = (job: Job) => {
-    setCurrentJobId(job.id);
+    // Stop any currently playing videos by setting currentJobId to null first
+    setCurrentJobId(null);
+    // Use setTimeout to ensure the previous video player is unmounted before showing the new one
+    setTimeout(() => {
+      setCurrentJobId(job.id);
+    }, 100);
   };
 
   const handleJobDelete = async (jobId: string) => {
@@ -137,7 +142,11 @@ export const Dashboard = ({ user }: DashboardProps) => {
             )}
 
             {currentJob && currentJob.status === 'completed' && (
-              <VideoPlayer job={currentJob} user={user} />
+              <VideoPlayer 
+                job={currentJob} 
+                user={user} 
+                isActive={true} // This video player is always active when rendered
+              />
             )}
 
             {currentJob && currentJob.status === 'failed' && (
