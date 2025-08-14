@@ -14,7 +14,13 @@
     "phases": {
       "setup": {
         "cmds": ["npm config set legacy-peer-deps true"]
+      },
+      "build": {
+        "cmds": ["npm run build"]
       }
+    },
+    "variables": {
+      "NIXPACKS_NODE_PACKAGE_MANAGER": "npm"
     }
   }
 } 
