@@ -6,13 +6,17 @@ import re
 import ast
 import subprocess
 import asyncio
+import base64
 from openai import OpenAI
-from moviepy import VideoFileClip, concatenate_videoclips
+from moviepy.video.io.VideoFileClip import VideoFileClip
 from typing import Callable, Optional, Dict, Any, List, Tuple
 import threading
 import time
 from pathlib import Path
+from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv()
 
 class VideoProcessor:
     def __init__(self, job_id: str, storage_dir: str = "storage/videos"):
@@ -25,8 +29,34 @@ class VideoProcessor:
         self.video_path = self.temp_dir / "input.mp4"
         self.output_path = self.storage_dir / f"{job_id}.mp4"
         
-        # OpenAI API key (you should move this to environment variables)
-        self.openai_key = "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"
+        # Load API keys from environment variables
+        self.openai_key = os.getenv("OPENAI_API_KEY")
+        if not self.openai_key:
+            raise ValueError("OPENAI_API_KEY environment variable is required")
+    
+    def _create_temp_cookies_file(self) -> Optional[str]:
+        """Create temporary cookies file from environment variable or file"""
+        # First try base64 encoded cookies (for deployment)
+        cookies_b64 = os.getenv("YOUTUBE_COOKIES_B64")
+        if cookies_b64:
+            try:
+                cookies_content = base64.b64decode(cookies_b64).decode('utf-8')
+                cookies_file = self.temp_dir / "cookies.txt"
+                with open(cookies_file, 'w') as f:
+                    f.write(cookies_content)
+                print(f"Using base64-encoded cookies from environment variable")
+                return str(cookies_file)
+            except Exception as e:
+                print(f"Failed to decode base64 cookies: {e}")
+        
+        # Fallback to file-based cookies (for local development)
+        cookies_file = os.getenv("YOUTUBE_COOKIES_FILE")
+        if cookies_file and os.path.exists(cookies_file):
+            print(f"Using cookies from file: {cookies_file}")
+            return cookies_file
+        
+        print("No cookies found - YouTube downloads may fail for restricted videos")
+        return None
     
     async def process_video(self, youtube_url: str, instructions: str = "", 
                           progress_callback: Optional[Callable[[int, str], None]] = None) -> Dict[str, Any]:
@@ -71,15 +101,45 @@ class VideoProcessor:
             raise e
     
     async def _download_youtube_video(self, youtube_url: str, output_path: str):
-        """Download YouTube video"""
+        """Download YouTube video with cookie support"""
         def download():
+            # Get cookies (either from file or base64 encoded)
+            cookies_file = self._create_temp_cookies_file()
+            
+            # Base yt-dlp options
             ydl_opts = {
-                'format': 'bestvideo[height<=720]+bestaudio/best[height<=720]',  # Limit to 720p for faster processing
                 'outtmpl': output_path,
-                'merge_output_format': 'mp4'
+                'merge_output_format': 'mp4',
+                'format': 'best[height<=720]/best',
+                'nocheckcertificate': True,
+                'ignoreerrors': False,
+                'no_warnings': False,
+                'quiet': False,
+                'verbose': True,
+                'extract_flat': False,
+                'force_generic_extractor': False,
+                'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'en-us,en;q=0.5',
+                    'Sec-Fetch-Mode': 'navigate',
+                }
             }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([youtube_url])
+            
+            # Add cookies if available
+            if cookies_file:
+                ydl_opts['cookiefile'] = cookies_file
+                print(f"Using cookies from: {cookies_file}")
+            
+            try:
+                print("Attempting to download video...", flush=True)
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([youtube_url])
+                print("Download successful", flush=True)
+            except Exception as e:
+                print(f"Download failed: {e}", flush=True)
+                raise e
         
         # Run download in thread pool to avoid blocking
         loop = asyncio.get_event_loop()

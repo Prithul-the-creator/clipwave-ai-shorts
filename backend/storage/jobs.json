@@ -1222,5 +1222,176 @@
     "video_url": null,
     "clips": [],
     "error": "No valid timestamp list found in GPT response"
+  },
+  "17ae71fb-3bf8-4707-be33-4a98310d564b": {
+    "id": "17ae71fb-3bf8-4707-be33-4a98310d564b",
+    "youtube_url": "https://www.youtube.com/shorts/G_8HnxkdO4Q",
+    "instructions": "Return the part about ap chem",
+    "user_id": "themagicman932@gmail.com",
+    "status": "failed",
+    "progress": 0,
+    "current_step": "Failed",
+    "created_at": "2025-08-13T22:47:56.906028",
+    "updated_at": "2025-08-13T22:47:59.492003",
+    "video_path": null,
+    "video_url": null,
+    "clips": [],
+    "error": "\u001b[0;31mERROR:\u001b[0m [youtube] G_8HnxkdO4Q: Sign in to confirm you\u2019re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies"
+  },
+  "a9ec1ff6-491b-403d-a3c1-c905d84e2d79": {
+    "id": "a9ec1ff6-491b-403d-a3c1-c905d84e2d79",
+    "youtube_url": "https://www.youtube.com/shorts/G_8HnxkdO4Q",
+    "instructions": "Return the part about ap chem",
+    "user_id": "themagicman932@gmail.com",
+    "status": "failed",
+    "progress": 0,
+    "current_step": "Failed",
+    "created_at": "2025-08-13T22:52:30.832946",
+    "updated_at": "2025-08-13T22:52:34.412738",
+    "video_path": null,
+    "video_url": null,
+    "clips": [],
+    "error": "\u001b[0;31mERROR:\u001b[0m [youtube] G_8HnxkdO4Q: Sign in to confirm you\u2019re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies"
+  },
+  "97e0cbe3-0f19-4de3-b7ad-1a33909eda19": {
+    "id": "97e0cbe3-0f19-4de3-b7ad-1a33909eda19",
+    "youtube_url": "https://www.youtube.com/shorts/d6XFhhX5yaQ",
+    "instructions": "Return the part about ap chem",
+    "user_id": "themagicman932@gmail.com",
+    "status": "failed",
+    "progress": 50,
+    "current_step": "Failed",
+    "created_at": "2025-08-14T00:48:27.120400",
+    "updated_at": "2025-08-14T00:48:36.704159",
+    "video_path": null,
+    "video_url": null,
+    "clips": [],
+    "error": "No valid timestamp list found in GPT response"
+  },
+  "d53434d8-43cb-45d6-9dbf-b851d2564532": {
+    "id": "d53434d8-43cb-45d6-9dbf-b851d2564532",
+    "youtube_url": "https://www.youtube.com/shorts/d6XFhhX5yaQ",
+    "instructions": "return the part about AP research",
+    "user_id": "themagicman932@gmail.com",
+    "status": "completed",
+    "progress": 100,
+    "current_step": "Completed",
+    "created_at": "2025-08-14T00:48:52.740670",
+    "updated_at": "2025-08-14T00:48:59.967605",
+    "video_path": "storage/videos/d53434d8-43cb-45d6-9dbf-b851d2564532.mp4",
+    "video_url": "/api/videos/d53434d8-43cb-45d6-9dbf-b851d2564532",
+    "clips": [
+      {
+        "id": "1",
+        "title": "Clip 1",
+        "duration": "3.9s",
+        "timeframe": "4.7s - 8.6s",
+        "start": 4.72,
+        "end": 8.64
+      }
+    ],
+    "error": null
+  },
+  "ac415cb1-26ff-438d-9bd3-6f8a83b990b9": {
+    "id": "ac415cb1-26ff-438d-9bd3-6f8a83b990b9",
+    "youtube_url": "https://www.youtube.com/shorts/d6XFhhX5yaQ",
+    "instructions": "Return me the part about AP research",
+    "user_id": "prithulbaveja@gmail.com",
+    "status": "completed",
+    "progress": 100,
+    "current_step": "Completed",
+    "created_at": "2025-08-14T00:52:15.185025",
+    "updated_at": "2025-08-14T00:52:22.109129",
+    "video_path": "storage/videos/ac415cb1-26ff-438d-9bd3-6f8a83b990b9.mp4",
+    "video_url": "/api/videos/ac415cb1-26ff-438d-9bd3-6f8a83b990b9",
+    "clips": [
+      {
+        "id": "1",
+        "title": "Clip 1",
+        "duration": "3.9s",
+        "timeframe": "4.7s - 8.6s",
+        "start": 4.72,
+        "end": 8.64
+      }
+    ],
+    "error": null
+  },
+  "5a861ac8-79e9-47db-8ff6-3434a8d01011": {
+    "id": "5a861ac8-79e9-47db-8ff6-3434a8d01011",
+    "youtube_url": "https://www.youtube.com/shorts/d6XFhhX5yaQ",
+    "instructions": "Return me the part about AP chineese",
+    "user_id": "prithulbaveja@gmail.com",
+    "status": "completed",
+    "progress": 100,
+    "current_step": "Completed",
+    "created_at": "2025-08-14T00:52:39.594765",
+    "updated_at": "2025-08-14T00:52:46.980294",
+    "video_path": "storage/videos/5a861ac8-79e9-47db-8ff6-3434a8d01011.mp4",
+    "video_url": "/api/videos/5a861ac8-79e9-47db-8ff6-3434a8d01011",
+    "clips": [
+      {
+        "id": "1",
+        "title": "Clip 1",
+        "duration": "8.0s",
+        "timeframe": "16.0s - 24.0s",
+        "start": 16.0,
+        "end": 24.04
+      }
+    ],
+    "error": null
+  },
+  "a13ee8d8-70c9-4b22-b488-d37489747924": {
+    "id": "a13ee8d8-70c9-4b22-b488-d37489747924",
+    "youtube_url": "https://www.youtube.com/shorts/d6XFhhX5yaQ",
+    "instructions": "Return the part about AP research",
+    "user_id": "prithulbaveja@gmail.com",
+    "status": "failed",
+    "progress": 0,
+    "current_step": "Failed",
+    "created_at": "2025-08-14T12:33:45.354300",
+    "updated_at": "2025-08-14T12:33:47.479924",
+    "video_path": null,
+    "video_url": null,
+    "clips": [],
+    "error": "\u001b[0;31mERROR:\u001b[0m [youtube] d6XFhhX5yaQ: Sign in to confirm you\u2019re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies"
+  },
+  "8a7bbff7-72aa-4f41-9ddf-a30070041b00": {
+    "id": "8a7bbff7-72aa-4f41-9ddf-a30070041b00",
+    "youtube_url": "https://www.youtube.com/shorts/d6XFhhX5yaQ",
+    "instructions": "return the part about ap research",
+    "user_id": "prithulbaveja@gmail.com",
+    "status": "failed",
+    "progress": 0,
+    "current_step": "Failed",
+    "created_at": "2025-08-14T12:34:18.161333",
+    "updated_at": "2025-08-14T12:34:19.968100",
+    "video_path": null,
+    "video_url": null,
+    "clips": [],
+    "error": "\u001b[0;31mERROR:\u001b[0m [youtube] d6XFhhX5yaQ: Sign in to confirm you\u2019re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies"
+  },
+  "992fce74-6f82-439c-b214-6726d32a1cd5": {
+    "id": "992fce74-6f82-439c-b214-6726d32a1cd5",
+    "youtube_url": "https://www.youtube.com/shorts/d6XFhhX5yaQ",
+    "instructions": "returnt he part about ap research",
+    "user_id": "prithulbaveja@gmail.com",
+    "status": "completed",
+    "progress": 100,
+    "current_step": "Completed",
+    "created_at": "2025-08-14T12:36:59.560597",
+    "updated_at": "2025-08-14T12:37:07.605543",
+    "video_path": "storage/videos/992fce74-6f82-439c-b214-6726d32a1cd5.mp4",
+    "video_url": "/api/videos/992fce74-6f82-439c-b214-6726d32a1cd5",
+    "clips": [
+      {
+        "id": "1",
+        "title": "Clip 1",
+        "duration": "3.9s",
+        "timeframe": "4.7s - 8.6s",
+        "start": 4.72,
+        "end": 8.64
+      }
+    ],
+    "error": null
   }
 }

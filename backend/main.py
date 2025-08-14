@@ -1,272 +1,238 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
-import asyncio
+import os
 import json
 import uuid
-import os
-import tempfile
-from datetime import datetime
-import aiofiles
+from typing import List, Dict, Any
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pathlib import Path
-
+import asyncio
 from video_processor import VideoProcessor
-from job_manager import JobManager
+from dotenv import load_dotenv
 
-app = FastAPI(title="ClipWave AI Backend", version="1.0.0")
+# Load environment variables
+load_dotenv()
+
+app = FastAPI(title="ClipWave AI Shorts API")
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",
         "http://localhost:3000",
-        "http://localhost:8080",  # <-- add this line
+        "http://localhost:8000",
+        "http://localhost:5173",
+        "https://clipwave-ai-shorts-production.up.railway.app",
+        # Add your custom domain here when you have it
+        # "https://clipwave.yourdomain.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Initialize job manager
-job_manager = JobManager()
+# Mount static files for frontend
+if os.path.exists("../dist"):
+    app.mount("/", StaticFiles(directory="../dist", html=True), name="static")
+elif os.path.exists("dist"):
+    app.mount("/", StaticFiles(directory="dist", html=True), name="static")
 
 # WebSocket connection manager
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: List[WebSocket] = []
+        self.active_connections: Dict[str, WebSocket] = {}
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, websocket: WebSocket, user_id: str):
         await websocket.accept()
-        self.active_connections.append(websocket)
+        self.active_connections[user_id] = websocket
 
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+    def disconnect(self, user_id: str):
+        if user_id in self.active_connections:
+            del self.active_connections[user_id]
 
-    async def send_personal_message(self, message: str, websocket: WebSocket):
-        await websocket.send_text(message)
-
-    async def broadcast(self, message: str):
-        for connection in self.active_connections:
+    async def send_personal_message(self, message: str, user_id: str):
+        if user_id in self.active_connections:
             try:
-                await connection.send_text(message)
-            except:
-                # Remove dead connections
-                self.active_connections.remove(connection)
+                await self.active_connections[user_id].send_text(message)
+            except Exception as e:
+                print(f"Error sending message to {user_id}: {e}")
+                self.disconnect(user_id)
 
 manager = ConnectionManager()
 
-# Pydantic models
-class VideoRequest(BaseModel):
-    youtube_url: str
-    instructions: Optional[str] = ""
-    user_id: Optional[str] = "anonymous"
+# In-memory storage for jobs (in production, use a database)
+jobs: Dict[str, Dict[str, Any]] = {}
 
-class JobResponse(BaseModel):
-    job_id: str
-    status: str
-    message: str
-
-class JobStatus(BaseModel):
-    job_id: str
-    status: str
-    progress: int
-    current_step: str
-    error: Optional[str] = None
-    video_url: Optional[str] = None
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Docker"""
+    return {"status": "healthy", "message": "ClipWave AI Shorts API is running"}
 
 @app.get("/")
-async def root():
-    return {"message": "ClipWave AI Backend is running"}
+async def read_root():
+    """Serve the frontend application"""
+    if os.path.exists("../dist/index.html"):
+        return FileResponse("../dist/index.html")
+    elif os.path.exists("dist/index.html"):
+        return FileResponse("dist/index.html")
+    return {"message": "ClipWave AI Shorts API"}
 
-@app.post("/api/jobs", response_model=JobResponse)
-async def create_job(request: VideoRequest, background_tasks: BackgroundTasks):
-    """Create a new video processing job"""
-    try:
-        job_id = str(uuid.uuid4())
-        
-        # Create job in manager
-        job = job_manager.create_job(
-            job_id=job_id,
-            youtube_url=request.youtube_url,
-            instructions=request.instructions,
-            user_id=request.user_id
-        )
-        
-        # Start processing in background
-        background_tasks.add_task(process_video_job, job_id)
-        
-        return JobResponse(
-            job_id=job_id,
-            status="queued",
-            message="Job created successfully"
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/jobs/{job_id}", response_model=JobStatus)
-async def get_job_status(job_id: str, user_id: Optional[str] = None):
-    """Get the status of a specific job"""
-    job = job_manager.get_job(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    # Ensure user can only access their own jobs
-    if user_id and job.get("user_id") != user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
-    
-    return JobStatus(
-        job_id=job_id,
-        status=job["status"],
-        progress=job["progress"],
-        current_step=job["current_step"],
-        error=job.get("error"),
-        video_url=job.get("video_url")
-    )
-
-@app.get("/api/jobs")
-async def list_jobs(user_id: Optional[str] = None):
-    """List all jobs (optionally filtered by user)"""
-    jobs = job_manager.list_jobs(user_id)
-    return {"jobs": jobs}
-
-@app.delete("/api/jobs/{job_id}")
-async def delete_job(job_id: str, user_id: Optional[str] = None):
-    """Delete a job and its associated files"""
-    job = job_manager.get_job(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    # Ensure user can only delete their own jobs
-    if user_id and job.get("user_id") != user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
-    
-    success = job_manager.delete_job(job_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return {"message": "Job deleted successfully"}
-
-@app.get("/api/videos/{job_id}")
-async def download_video(job_id: str, user_id: Optional[str] = None):
-    """Download the processed video file"""
-    job = job_manager.get_job(job_id)
-    if not job or job["status"] != "completed":
-        raise HTTPException(status_code=404, detail="Video not found or not ready")
-    
-    # Ensure user can only download their own videos
-    if user_id and job.get("user_id") != user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
-    
-    video_path = job.get("video_path")
-    if not video_path or not os.path.exists(video_path):
-        raise HTTPException(status_code=404, detail="Video file not found")
-    
-    return FileResponse(
-        video_path,
-        media_type="video/mp4",
-        filename=f"clip_{job_id}.mp4"
-    )
-
-@app.websocket("/ws/{job_id}")
-async def websocket_endpoint(websocket: WebSocket, job_id: str):
-    """WebSocket endpoint for real-time job updates"""
-    await manager.connect(websocket)
+@app.websocket("/ws/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: str):
+    await manager.connect(websocket, user_id)
     try:
         while True:
-            # Send initial status
-            job = job_manager.get_job(job_id)
-            if job:
-                await manager.send_personal_message(
-                    json.dumps({
-                        "type": "job_update",
-                        "job_id": job_id,
-                        "data": job
-                    }),
-                    websocket
-                )
-            
-            # Keep connection alive and wait for updates
-            await asyncio.sleep(1)
+            data = await websocket.receive_text()
+            # Handle any incoming WebSocket messages if needed
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        manager.disconnect(user_id)
 
-async def process_video_job(job_id: str):
-    """Background task to process video jobs"""
+@app.post("/api/jobs")
+async def create_job(
+    youtube_url: str = Form(...),
+    instructions: str = Form(""),
+    user_id: str = Form(...)
+):
+    """Create a new video processing job"""
+    job_id = str(uuid.uuid4())
+    
+    # Initialize job
+    jobs[job_id] = {
+        "id": job_id,
+        "youtube_url": youtube_url,
+        "instructions": instructions,
+        "user_id": user_id,
+        "status": "processing",
+        "progress": 0,
+        "created_at": asyncio.get_event_loop().time(),
+        "video_path": None,
+        "clips": [],
+        "transcript": ""
+    }
+    
+    # Start processing in background
+    asyncio.create_task(process_video_job(job_id, youtube_url, instructions, user_id))
+    
+    return {"job_id": job_id, "status": "processing"}
+
+async def process_video_job(job_id: str, youtube_url: str, instructions: str, user_id: str):
+    """Process video in background"""
     try:
-        job = job_manager.get_job(job_id)
-        if not job:
-            return
-        
-        # Update status to processing
-        job_manager.update_job(job_id, {
-            "status": "processing",
-            "progress": 0,
-            "current_step": "Initializing..."
-        })
-        
-        # Initialize video processor
         processor = VideoProcessor(job_id)
         
-        # Process the video with progress callbacks
         def progress_callback(progress: int, step: str):
-            job_manager.update_job(job_id, {
-                "progress": progress,
-                "current_step": step
-            })
-            # Broadcast update to WebSocket clients
-            asyncio.create_task(manager.broadcast(
-                json.dumps({
-                    "type": "job_update",
-                    "job_id": job_id,
-                    "data": job_manager.get_job(job_id)
-                })
-            ))
+            jobs[job_id]["progress"] = progress
+            asyncio.create_task(
+                manager.send_personal_message(
+                    json.dumps({
+                        "type": "progress",
+                        "job_id": job_id,
+                        "progress": progress,
+                        "step": step
+                    }),
+                    user_id
+                )
+            )
         
         # Process the video
-        result = await processor.process_video(
-            youtube_url=job["youtube_url"],
-            instructions=job["instructions"],
-            progress_callback=progress_callback
-        )
+        result = await processor.process_video(youtube_url, instructions, progress_callback)
         
         # Update job with results
-        job_manager.update_job(job_id, {
+        jobs[job_id].update({
             "status": "completed",
             "progress": 100,
-            "current_step": "Completed",
             "video_path": result["video_path"],
-            "video_url": f"/api/videos/{job_id}",
-            "clips": result.get("clips", [])
+            "clips": result["clips"],
+            "transcript": result["transcript"]
         })
         
-        # Broadcast completion
-        asyncio.create_task(manager.broadcast(
+        # Send completion message
+        await manager.send_personal_message(
             json.dumps({
-                "type": "job_update",
+                "type": "completed",
                 "job_id": job_id,
-                "data": job_manager.get_job(job_id)
-            })
-        ))
+                "result": {
+                    "video_path": result["video_path"],
+                    "clips": result["clips"]
+                }
+            }),
+            user_id
+        )
         
     except Exception as e:
-        # Update job with error
-        job_manager.update_job(job_id, {
+        jobs[job_id].update({
             "status": "failed",
-            "error": str(e),
-            "current_step": "Failed"
+            "error": str(e)
         })
         
-        # Broadcast error
-        asyncio.create_task(manager.broadcast(
+        await manager.send_personal_message(
             json.dumps({
-                "type": "job_update",
+                "type": "error",
                 "job_id": job_id,
-                "data": job_manager.get_job(job_id)
-            })
-        ))
+                "error": str(e)
+            }),
+            user_id
+        )
+
+@app.get("/api/jobs")
+async def get_jobs(user_id: str):
+    """Get all jobs for a user"""
+    user_jobs = [job for job in jobs.values() if job["user_id"] == user_id]
+    return user_jobs
+
+@app.get("/api/jobs/{job_id}")
+async def get_job(job_id: str, user_id: str):
+    """Get a specific job"""
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    job = jobs[job_id]
+    if job["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    return job
+
+@app.get("/api/videos/{job_id}")
+async def get_video(job_id: str, user_id: str):
+    """Get video file for a job"""
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    job = jobs[job_id]
+    if job["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    if job["status"] != "completed" or not job["video_path"]:
+        raise HTTPException(status_code=404, detail="Video not ready")
+    
+    video_path = Path(job["video_path"])
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="Video file not found")
+    
+    return FileResponse(video_path, media_type="video/mp4")
+
+@app.delete("/api/jobs/{job_id}")
+async def delete_job(job_id: str, user_id: str):
+    """Delete a job"""
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    job = jobs[job_id]
+    if job["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Delete video file if it exists
+    if job["video_path"]:
+        try:
+            Path(job["video_path"]).unlink(missing_ok=True)
+        except Exception:
+            pass
+    
+    del jobs[job_id]
+    return {"message": "Job deleted"}
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port) 
