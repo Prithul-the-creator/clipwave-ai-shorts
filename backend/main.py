@@ -32,12 +32,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files for frontend
-if os.path.exists("dist"):
-    app.mount("/", StaticFiles(directory="dist", html=True), name="static")
-elif os.path.exists("../dist"):
-    app.mount("/", StaticFiles(directory="../dist", html=True), name="static")
-
 # WebSocket connection manager
 class ConnectionManager:
     def __init__(self):
@@ -67,7 +61,20 @@ jobs: Dict[str, Dict[str, Any]] = {}
 @app.get("/health")
 async def health_check():
     """Health check endpoint for Docker"""
+    print("Health check endpoint called")
     return {"status": "healthy", "message": "ClipWave AI Shorts API is running"}
+
+@app.get("/api/health")
+async def api_health_check():
+    """Alternative health check endpoint"""
+    print("API health check endpoint called")
+    return {"status": "healthy", "message": "ClipWave AI Shorts API is running"}
+
+# Mount static files for frontend (after API routes)
+if os.path.exists("dist"):
+    app.mount("/", StaticFiles(directory="dist", html=True), name="static")
+elif os.path.exists("../dist"):
+    app.mount("/", StaticFiles(directory="../dist", html=True), name="static")
 
 @app.get("/")
 async def read_root():
@@ -235,4 +242,8 @@ async def delete_job(job_id: str, user_id: str):
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
+    print(f"Starting ClipWave AI Shorts API on port {port}")
+    print(f"Current working directory: {os.getcwd()}")
+    print(f"Dist directory exists: {os.path.exists('dist')}")
+    print(f"../dist directory exists: {os.path.exists('../dist')}")
     uvicorn.run(app, host="0.0.0.0", port=port) 
