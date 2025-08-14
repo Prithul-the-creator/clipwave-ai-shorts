@@ -49,4 +49,4 @@ EXPOSE 8000
 ENV PORT=8000
 
 # Start the application
-CMD ["sh", "-c", "cd backend && python main.py"] 
+CMD ["python", "backend/main.py"] 

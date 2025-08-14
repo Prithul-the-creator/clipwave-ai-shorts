@@ -33,10 +33,10 @@ app.add_middleware(
 )
 
 # Mount static files for frontend
-if os.path.exists("../dist"):
-    app.mount("/", StaticFiles(directory="../dist", html=True), name="static")
-elif os.path.exists("dist"):
+if os.path.exists("dist"):
     app.mount("/", StaticFiles(directory="dist", html=True), name="static")
+elif os.path.exists("../dist"):
+    app.mount("/", StaticFiles(directory="../dist", html=True), name="static")
 
 # WebSocket connection manager
 class ConnectionManager:
@@ -72,10 +72,10 @@ async def health_check():
 @app.get("/")
 async def read_root():
     """Serve the frontend application"""
-    if os.path.exists("../dist/index.html"):
-        return FileResponse("../dist/index.html")
-    elif os.path.exists("dist/index.html"):
+    if os.path.exists("dist/index.html"):
         return FileResponse("dist/index.html")
+    elif os.path.exists("../dist/index.html"):
+        return FileResponse("../dist/index.html")
     return {"message": "ClipWave AI Shorts API"}
 
 @app.websocket("/ws/{user_id}")
