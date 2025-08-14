@@ -33,10 +33,11 @@ RUN npm run build
 
 # Copy backend files
 COPY backend/ ./backend/
-COPY requirements.txt ./backend/
+COPY requirements-deploy.txt ./backend/
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r backend/requirements.txt
+# Install Python dependencies with CPU-only PyTorch
+RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir -r backend/requirements-deploy.txt
 
 # Create storage directory
 RUN mkdir -p storage/videos
@@ -48,4 +49,4 @@ EXPOSE 8000
 ENV PORT=8000
 
 # Start the application
-CMD ["cd", "backend", "&&", "python", "main.py"] 
+CMD ["sh", "-c", "cd backend && python main.py"] 
