@@ -1,11 +1,14 @@
 [phases.setup]
-nixPkgs = ["ffmpeg"]
+nixPkgs = ["ffmpeg", "python311"]
 
 [phases.install]
 cmds = ["pip install -r requirements.txt"]
 
 [phases.build]
-cmds = ["npm install", "npm run build"]
+cmds = ["npm install --legacy-peer-deps", "npm run build"]
 
 [start]
-cmd = "cd backend && python main.py" 
+cmd = "cd backend && python main.py"
+
+[variables]
+NIXPACKS_NODE_PACKAGE_MANAGER = "npm" 
