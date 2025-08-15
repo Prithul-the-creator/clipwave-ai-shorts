@@ -1,4 +1,6 @@
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.DEV 
+  ? 'http://localhost:8000' 
+  : 'https://clipwave-ai-shorts-production.up.railway.app';
 
 export interface VideoRequest {
   youtube_url: string;
@@ -112,7 +114,10 @@ class ApiClient {
   }
 
   getWebSocketUrl(jobId: string): string {
-    return `ws://localhost:8000/ws/${jobId}`;
+    const baseUrl = import.meta.env.DEV 
+      ? 'ws://localhost:8000' 
+      : 'wss://clipwave-ai-shorts-production.up.railway.app';
+    return `${baseUrl}/ws/${jobId}`;
   }
 }
 
