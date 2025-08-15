@@ -317,6 +317,45 @@ async def test_endpoint():
         "environment": "production" if os.path.exists("/app") else "development"
     }
 
+@app.get("/api/test-download")
+async def test_download():
+    """Test video download functionality"""
+    try:
+        from video_processor import VideoProcessor
+        
+        # Test with a simple, short YouTube video
+        test_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"  # Rick Roll - short video
+        
+        processor = VideoProcessor("test-download-api")
+        
+        # Test download
+        await processor._download_youtube_video(test_url, str(processor.video_path))
+        
+        # Check if file was created
+        if processor.video_path.exists():
+            file_size = processor.video_path.stat().st_size
+            return {
+                "status": "success",
+                "message": "Video download test successful",
+                "file_size": file_size,
+                "file_path": str(processor.video_path),
+                "temp_dir": str(processor.temp_dir)
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "Video file was not created",
+                "temp_dir": str(processor.temp_dir),
+                "files_in_temp": list(processor.temp_dir.glob('*')) if processor.temp_dir.exists() else []
+            }
+            
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Video download test failed: {str(e)}",
+            "error_type": type(e).__name__
+        }
+
 # Serve static assets (CSS, JS files)
 @app.get("/assets/{file_path:path}")
 async def serve_assets(file_path: str):

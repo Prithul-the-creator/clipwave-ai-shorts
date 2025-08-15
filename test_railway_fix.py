@@ -77,6 +77,51 @@ async def test_storage_access():
     
     return True
 
+async def test_video_download():
+    """Test video download functionality"""
+    print("\n📥 Testing video download...")
+    
+    # Test with a simple, short YouTube video
+    test_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"  # Rick Roll - short video
+    
+    try:
+        processor = VideoProcessor("test-download-123")
+        print(f"✅ VideoProcessor initialized for download test")
+        print(f"   Temp directory: {processor.temp_dir}")
+        print(f"   Expected video path: {processor.video_path}")
+        
+        # Test download
+        print("Starting download test...")
+        await processor._download_youtube_video(test_url, str(processor.video_path))
+        
+        # Check if file was created
+        if processor.video_path.exists():
+            file_size = processor.video_path.stat().st_size
+            print(f"✅ Download successful! File size: {file_size} bytes")
+            
+            if file_size > 0:
+                print("✅ File is not empty")
+                return True
+            else:
+                print("❌ File is empty")
+                return False
+        else:
+            print("❌ File was not created")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Download test failed: {e}")
+        return False
+    finally:
+        # Clean up
+        try:
+            if processor.temp_dir.exists():
+                import shutil
+                shutil.rmtree(processor.temp_dir)
+                print("✅ Cleaned up temp directory")
+        except Exception as e:
+            print(f"Warning: Could not clean up temp directory: {e}")
+
 def test_imports():
     """Test that all required modules can be imported"""
     print("\n📦 Testing imports...")
@@ -121,18 +166,33 @@ async def main():
     # Test video processor
     await test_video_processor()
     
+    # Test video download (optional - requires internet)
+    print("\n" + "="*50)
+    print("📥 Video Download Test (requires internet connection)")
+    print("="*50)
+    
+    download_success = await test_video_download()
+    
     print("\n🎉 All tests completed!")
     print("\n📋 Summary:")
     print("- VideoProcessor now handles Railway's ephemeral storage")
     print("- Storage paths are properly configured for both local and Docker environments")
     print("- Video data is stored in memory as a fallback")
     print("- Multiple file paths are checked when serving videos")
+    print(f"- Video download test: {'✅ PASSED' if download_success else '❌ FAILED'}")
     
     print("\n🔧 Next steps:")
     print("1. Deploy to Railway")
     print("2. Test the /api/test-storage endpoint")
     print("3. Process a video and check if it's served correctly")
     print("4. Check Railway logs for any remaining issues")
+    
+    if not download_success:
+        print("\n⚠️  Video download test failed. This might indicate:")
+        print("- Network connectivity issues")
+        print("- YouTube download restrictions")
+        print("- Missing or invalid cookies")
+        print("- yt-dlp version issues")
 
 if __name__ == "__main__":
     asyncio.run(main()) 

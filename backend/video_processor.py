@@ -55,10 +55,32 @@ class VideoProcessor:
         if cookies_b64:
             try:
                 cookies_content = base64.b64decode(cookies_b64).decode('utf-8')
+                
+                # Filter out malformed cookie entries
+                filtered_lines = []
+                for line in cookies_content.split('\n'):
+                    line = line.strip()
+                    if not line or line.startswith('#'):
+                        filtered_lines.append(line)
+                        continue
+                    
+                    # Check if line has the correct format (7 tab-separated fields)
+                    parts = line.split('\t')
+                    if len(parts) == 7:
+                        # Additional validation: check if the cookie value doesn't contain newlines
+                        if '\n' not in parts[6]:
+                            filtered_lines.append(line)
+                        else:
+                            print(f"Skipping cookie with newline in value: {parts[0]}")
+                    else:
+                        print(f"Skipping malformed cookie line: {line[:50]}...")
+                
+                # Write filtered cookies
                 cookies_file = self.temp_dir / "cookies.txt"
                 with open(cookies_file, 'w', encoding='utf-8') as f:
-                    f.write(cookies_content)
-                print(f"Using base64-encoded cookies from environment variable")
+                    f.write('\n'.join(filtered_lines))
+                
+                print(f"Using base64-encoded cookies from environment variable (filtered)")
                 return str(cookies_file)
             except Exception as e:
                 print(f"Failed to decode base64 cookies: {e}")
@@ -179,7 +201,7 @@ class VideoProcessor:
                 'merge_output_format': 'mp4',
                 'format': 'best[height<=720]/best',
                 'nocheckcertificate': True,
-                'ignoreerrors': False,
+                'ignoreerrors': False,  # Changed to False to catch errors
                 'no_warnings': False,
                 'quiet': False,
                 'verbose': True,
@@ -207,7 +229,6 @@ class VideoProcessor:
                 'keepvideo': False,
                 'writesubtitles': False,
                 'writeautomaticsub': False,
-                'ignoreerrors': True,  # Continue on errors
                 'postprocessors': [{
                     'key': 'FFmpegVideoConvertor',
                     'preferedformat': 'mp4',
@@ -230,6 +251,8 @@ class VideoProcessor:
                     print(f"Warning: Could not verify cookies file format: {e}")
             else:
                 print("No cookies file available - some videos may fail to download")
+            
+            download_successful = False
             
             try:
                 print("Attempting to download video...", flush=True)
@@ -258,23 +281,59 @@ class VideoProcessor:
                         # Rename to expected path if needed
                         if found_file != output_path:
                             os.rename(found_file, output_path)
+                        download_successful = True
                     else:
                         # List files in temp directory for debugging
                         print(f"Files in temp directory: {list(self.temp_dir.glob('*'))}", flush=True)
                         raise Exception(f"Download appeared successful but file not found at {output_path}")
+                else:
+                    download_successful = True
                 
-                print("Download successful", flush=True)
+                if download_successful:
+                    print("Download successful", flush=True)
+                    # Verify file is not empty
+                    if os.path.getsize(output_path) == 0:
+                        raise Exception("Downloaded file is empty")
+                    
             except Exception as e:
                 print(f"Download failed: {e}", flush=True)
                 
+                # Check if it's a cookies-related error
+                cookies_error = any(keyword in str(e).lower() for keyword in [
+                    'cookies', 'netscape', 'invalid length', 'malformed'
+                ])
+                
+                if cookies_error and cookies_file:
+                    print("Cookies error detected, retrying without cookies...", flush=True)
+                    ydl_opts.pop('cookiefile', None)
+                    try:
+                        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                            ydl.download([youtube_url])
+                        
+                        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                            print("Download successful without cookies", flush=True)
+                            download_successful = True
+                        else:
+                            raise Exception("Download without cookies failed - file not created or empty")
+                    except Exception as e2:
+                        print(f"Download without cookies also failed: {e2}", flush=True)
+                        raise e2
+                
                 # Try with different format if first attempt failed
-                if "403" in str(e) or "Forbidden" in str(e):
+                elif "403" in str(e) or "Forbidden" in str(e):
                     print("403 error detected, trying with different format...", flush=True)
                     ydl_opts['format'] = 'worst[height<=480]/worst'  # Try lower quality
                     try:
                         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                             ydl.download([youtube_url])
-                        print("Download successful with fallback format", flush=True)
+                        
+                        # Check if download was successful
+                        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                            print("Download successful with fallback format", flush=True)
+                            download_successful = True
+                        else:
+                            raise Exception("Fallback download failed - file not created or empty")
+                            
                     except Exception as e2:
                         print(f"Fallback format also failed: {e2}", flush=True)
                         # Try without cookies if download failed
@@ -285,7 +344,13 @@ class VideoProcessor:
                             try:
                                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                                     ydl.download([youtube_url])
-                                print("Download successful without cookies", flush=True)
+                                
+                                if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                                    print("Download successful without cookies", flush=True)
+                                    download_successful = True
+                                else:
+                                    raise Exception("Download without cookies failed - file not created or empty")
+                                    
                             except Exception as e3:
                                 print(f"Download failed even without cookies: {e3}", flush=True)
                                 raise e3
@@ -299,12 +364,22 @@ class VideoProcessor:
                         try:
                             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                                 ydl.download([youtube_url])
-                            print("Download successful without cookies", flush=True)
+                            
+                            if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                                print("Download successful without cookies", flush=True)
+                                download_successful = True
+                            else:
+                                raise Exception("Download without cookies failed - file not created or empty")
+                                
                         except Exception as e2:
                             print(f"Download failed even without cookies: {e2}", flush=True)
                             raise e2
                     else:
                         raise e
+            
+            # Final verification
+            if not download_successful or not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+                raise Exception(f"Video download failed completely. File exists: {os.path.exists(output_path)}, Size: {os.path.getsize(output_path) if os.path.exists(output_path) else 0}")
         
         # Run download in thread pool to avoid blocking
         loop = asyncio.get_event_loop()
@@ -325,6 +400,17 @@ class VideoProcessor:
                 raise ValueError(f"Video file is empty: {video_path}")
             
             print(f"Video file size: {file_size} bytes", flush=True)
+            print(f"Video file path: {video_path}", flush=True)
+            print(f"Video file absolute path: {os.path.abspath(video_path)}", flush=True)
+            
+            # Check if file is readable
+            try:
+                with open(video_path, 'rb') as f:
+                    # Try to read first few bytes to verify file is accessible
+                    f.read(1024)
+                print("Video file is readable", flush=True)
+            except Exception as e:
+                raise IOError(f"Cannot read video file {video_path}: {e}")
             
             try:
                 print("Starting Whisper transcription...", flush=True)
