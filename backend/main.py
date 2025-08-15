@@ -23,6 +23,7 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:8000",
         "http://localhost:5173",
+        "http://localhost:8080",
         "https://clipwave-ai-shorts-production.up.railway.app",
         # Add your custom domain here when you have it
         # "https://clipwave.yourdomain.com",
