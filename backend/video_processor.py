@@ -174,6 +174,12 @@ class VideoProcessor:
                 'writesubtitles': False,
                 'writeautomaticsub': False,
                 'ignoreerrors': True,  # Continue on errors
+                'postprocessors': [{
+                    'key': 'FFmpegVideoConvertor',
+                    'preferedformat': 'mp4',
+                }],
+                'prefer_ffmpeg': True,
+                'ffmpeg_location': 'ffmpeg',
             }
             
             # Add cookies if available
@@ -195,6 +201,34 @@ class VideoProcessor:
                 print("Attempting to download video...", flush=True)
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([youtube_url])
+                
+                # Check if the file was actually created
+                if not os.path.exists(output_path):
+                    # Try to find the file with different extensions
+                    possible_paths = [
+                        output_path,
+                        output_path.replace('.mp4', '.webm'),
+                        output_path.replace('.mp4', '.mkv'),
+                        str(self.temp_dir / "input.webm"),
+                        str(self.temp_dir / "input.mkv"),
+                    ]
+                    
+                    found_file = None
+                    for path in possible_paths:
+                        if os.path.exists(path):
+                            found_file = path
+                            break
+                    
+                    if found_file:
+                        print(f"Found downloaded file at: {found_file}", flush=True)
+                        # Rename to expected path if needed
+                        if found_file != output_path:
+                            os.rename(found_file, output_path)
+                    else:
+                        # List files in temp directory for debugging
+                        print(f"Files in temp directory: {list(self.temp_dir.glob('*'))}", flush=True)
+                        raise Exception(f"Download appeared successful but file not found at {output_path}")
+                
                 print("Download successful", flush=True)
             except Exception as e:
                 print(f"Download failed: {e}", flush=True)
@@ -246,6 +280,18 @@ class VideoProcessor:
         """Transcribe video using Whisper"""
         def transcribe():
             start_time = time.time()
+            
+            # Check if video file exists
+            if not os.path.exists(video_path):
+                raise FileNotFoundError(f"Video file not found: {video_path}")
+            
+            # Check file size
+            file_size = os.path.getsize(video_path)
+            if file_size == 0:
+                raise ValueError(f"Video file is empty: {video_path}")
+            
+            print(f"Video file size: {file_size} bytes", flush=True)
+            
             try:
                 print("Starting Whisper transcription...", flush=True)
                 model = whisper.load_model("base")
