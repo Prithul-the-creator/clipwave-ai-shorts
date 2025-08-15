@@ -68,11 +68,17 @@ class ApiClient {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
+    
+    // Don't set Content-Type for FormData (browser will set it automatically)
+    const headers = options.body instanceof FormData 
+      ? { ...options.headers }
+      : {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        };
+
     const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers,
       ...options,
     });
 
@@ -85,9 +91,17 @@ class ApiClient {
   }
 
   async createJob(request: VideoRequest): Promise<JobResponse> {
+    const formData = new FormData();
+    formData.append('youtube_url', request.youtube_url);
+    formData.append('instructions', request.instructions || '');
+    formData.append('user_id', request.user_id || 'anonymous');
+
     return this.request<JobResponse>('/api/jobs', {
       method: 'POST',
-      body: JSON.stringify(request),
+      body: formData,
+      headers: {
+        // Remove Content-Type header to let browser set it for FormData
+      },
     });
   }
 
