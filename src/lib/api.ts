@@ -127,11 +127,11 @@ class ApiClient {
     return `${this.baseUrl}/api/videos/${jobId}${params}`;
   }
 
-  getWebSocketUrl(jobId: string): string {
+  getWebSocketUrl(userId: string): string {
     const baseUrl = import.meta.env.DEV 
       ? 'ws://localhost:8000' 
       : 'wss://clipwave-ai-shorts-production.up.railway.app';
-    return `${baseUrl}/ws/${jobId}`;
+    return `${baseUrl}/ws/${userId}`;
   }
 }
 

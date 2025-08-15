@@ -55,7 +55,7 @@ export const useJobQueue = (userId?: string) => {
       setJobs(prev => [newJob, ...prev]);
 
       // Connect to WebSocket for real-time updates
-      connectWebSocket(response.job_id);
+      connectWebSocket(userId || 'anonymous');
 
       return response.job_id;
     } catch (err) {
@@ -73,26 +73,46 @@ export const useJobQueue = (userId?: string) => {
     }
   }, [userId]);
 
-  const connectWebSocket = useCallback((jobId: string) => {
+  const connectWebSocket = useCallback((user_id: string) => {
     // Close existing connection if any
     if (websocketRef.current) {
       websocketRef.current.close();
     }
 
-    const ws = new WebSocket(apiClient.getWebSocketUrl(jobId));
+    const ws = new WebSocket(apiClient.getWebSocketUrl(user_id));
     websocketRef.current = ws;
 
     ws.onopen = () => {
-      console.log(`WebSocket connected for job ${jobId}`);
+      console.log(`WebSocket connected for user ${user_id}`);
     };
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.type === 'job_update' && data.job_id === jobId) {
+        console.log('WebSocket message received:', data);
+        
+        if (data.type === 'progress') {
           setJobs(prev => prev.map(job => 
-            job.id === jobId 
-              ? { ...job, ...data.data }
+            job.id === data.job_id 
+              ? { ...job, progress: data.progress, current_step: data.step }
+              : job
+          ));
+        } else if (data.type === 'completed') {
+          setJobs(prev => prev.map(job => 
+            job.id === data.job_id 
+              ? { 
+                  ...job, 
+                  status: 'completed', 
+                  progress: 100,
+                  video_path: data.result?.video_path,
+                  clips: data.result?.clips || []
+                }
+              : job
+          ));
+        } else if (data.type === 'error') {
+          setJobs(prev => prev.map(job => 
+            job.id === data.job_id 
+              ? { ...job, status: 'failed', error: data.error }
               : job
           ));
         }
@@ -106,7 +126,7 @@ export const useJobQueue = (userId?: string) => {
     };
 
     ws.onclose = () => {
-      console.log(`WebSocket disconnected for job ${jobId}`);
+      console.log(`WebSocket disconnected for user ${user_id}`);
     };
   }, []);
 
