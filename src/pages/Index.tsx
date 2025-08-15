@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dashboard } from '@/components/Dashboard';
 import { Navbar } from '@/components/Navbar';
 import { AuthModal } from '@/components/AuthModal';
@@ -9,16 +9,49 @@ import HowItWorksSection from '@/components/HowItWorksSection';
 import Footer from '@/components/Footer';
 import { motion } from 'framer-motion';
 import AnimatedDemo from '@/components/AnimatedDemo';
+import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
   const [user, setUser] = useState<{ email: string; name?: string } | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
+  useEffect(() => {
+    // Check for existing session
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser({ 
+          email: session.user.email || '', 
+          name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] 
+        });
+      }
+    };
+
+    checkSession();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === 'SIGNED_IN' && session?.user) {
+          setUser({ 
+            email: session.user.email || '', 
+            name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] 
+          });
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   const handleLogin = (email: string) => {
     setUser({ email, name: email.split('@')[0] });
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
   };
 
