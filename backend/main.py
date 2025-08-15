@@ -2,7 +2,7 @@ import os
 import json
 import uuid
 from typing import List, Dict, Any
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Form, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -71,6 +71,47 @@ async def api_health_check():
     print("API health check endpoint called")
     return {"status": "healthy", "message": "ClipWave AI Shorts API is running"}
 
+@app.get("/api/test-storage")
+async def test_storage():
+    """Test storage directory access"""
+    try:
+        # Test different storage paths
+        storage_paths = [
+            Path("/app/storage/videos"),
+            Path("./storage/videos"),
+            Path("storage/videos")
+        ]
+        
+        results = {}
+        for path in storage_paths:
+            results[str(path)] = {
+                "exists": path.exists(),
+                "is_dir": path.is_dir() if path.exists() else False,
+                "writable": os.access(path, os.W_OK) if path.exists() else False
+            }
+        
+        # Try to create a test file
+        test_file = Path("/app/storage/videos/test.txt") if os.path.exists("/app") else Path("./storage/videos/test.txt")
+        try:
+            test_file.parent.mkdir(parents=True, exist_ok=True)
+            test_file.write_text("test")
+            test_file.unlink()  # Clean up
+            results["test_write"] = True
+        except Exception as e:
+            results["test_write"] = False
+            results["write_error"] = str(e)
+        
+        return {
+            "status": "storage_test",
+            "current_dir": os.getcwd(),
+            "storage_paths": results
+        }
+    except Exception as e:
+        return {
+            "status": "storage_test_failed",
+            "error": str(e)
+        }
+
 @app.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
     await manager.connect(websocket, user_id)
@@ -137,7 +178,8 @@ async def process_video_job(job_id: str, youtube_url: str, instructions: str, us
             "progress": 100,
             "video_path": result["video_path"],
             "clips": result["clips"],
-            "transcript": result["transcript"]
+            "transcript": result["transcript"],
+            "video_data": result.get("video_data")  # Store video data for Railway
         })
         
         # Send completion message
@@ -203,10 +245,47 @@ async def get_video(job_id: str, user_id: str):
         raise HTTPException(status_code=404, detail="Video not ready")
     
     video_path = Path(job["video_path"])
-    if not video_path.exists():
-        raise HTTPException(status_code=404, detail="Video file not found")
     
-    return FileResponse(video_path, media_type="video/mp4")
+    # Add debugging information
+    print(f"Requesting video for job {job_id}")
+    print(f"Video path: {video_path}")
+    print(f"Video path absolute: {video_path.absolute()}")
+    print(f"Video path exists: {video_path.exists()}")
+    print(f"Current working directory: {os.getcwd()}")
+    print(f"Storage directory exists: {Path('/app/storage/videos').exists() if os.path.exists('/app') else Path('./storage/videos').exists()}")
+    
+    # Try multiple possible paths for the video file
+    possible_paths = [
+        video_path,
+        Path(f"/app/storage/videos/{job_id}.mp4"),
+        Path(f"./storage/videos/{job_id}.mp4"),
+        Path(f"storage/videos/{job_id}.mp4"),
+        Path(f"/tmp/{job_id}.mp4"),  # Fallback to temp directory
+    ]
+    
+    found_video_path = None
+    for path in possible_paths:
+        print(f"Trying path: {path} - exists: {path.exists()}")
+        if path.exists() and path.stat().st_size > 0:
+            found_video_path = path
+            print(f"Found video at: {found_video_path}")
+            break
+    
+    if not found_video_path:
+        # If no video file found, check if we can serve from job data
+        if "video_data" in job and job["video_data"]:
+            # Serve from base64 encoded data
+            import base64
+            video_data = base64.b64decode(job["video_data"])
+            return Response(
+                content=video_data,
+                media_type="video/mp4",
+                headers={"Content-Disposition": f"attachment; filename=clip_{job_id}.mp4"}
+            )
+        else:
+            raise HTTPException(status_code=404, detail="Video file not found")
+    
+    return FileResponse(found_video_path, media_type="video/mp4")
 
 @app.delete("/api/jobs/{job_id}")
 async def delete_job(job_id: str, user_id: str):
@@ -227,6 +306,16 @@ async def delete_job(job_id: str, user_id: str):
     
     del jobs[job_id]
     return {"message": "Job deleted"}
+
+@app.get("/api/test")
+async def test_endpoint():
+    """Simple test endpoint"""
+    return {
+        "status": "ok",
+        "message": "ClipWave AI Shorts API is working",
+        "timestamp": asyncio.get_event_loop().time(),
+        "environment": "production" if os.path.exists("/app") else "development"
+    }
 
 # Serve static assets (CSS, JS files)
 @app.get("/assets/{file_path:path}")

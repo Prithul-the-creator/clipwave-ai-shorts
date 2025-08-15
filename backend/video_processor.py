@@ -19,10 +19,24 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class VideoProcessor:
-    def __init__(self, job_id: str, storage_dir: str = "storage/videos"):
+    def __init__(self, job_id: str, storage_dir: str = None):
         self.job_id = job_id
-        self.storage_dir = Path(storage_dir)
+        
+        # Use absolute path for storage directory
+        if storage_dir is None:
+            # Default to /app/storage/videos in Docker, or ./storage/videos locally
+            if os.path.exists("/app"):
+                # Running in Docker container
+                self.storage_dir = Path("/app/storage/videos")
+            else:
+                # Running locally
+                self.storage_dir = Path("./storage/videos")
+        else:
+            self.storage_dir = Path(storage_dir)
+        
+        # Ensure storage directory exists
         self.storage_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Using storage directory: {self.storage_dir.absolute()}")
         
         # Create temp folder for this job
         self.temp_dir = Path(tempfile.mkdtemp())
@@ -100,13 +114,33 @@ class VideoProcessor:
             clips_info = await self._render_video(str(self.video_path), timestamps)
             update_progress(100, "Video processing completed")
             
+            # Verify the output file was created
+            print(f"Final output path: {self.output_path}")
+            print(f"Output file exists: {self.output_path.exists()}")
+            if self.output_path.exists():
+                print(f"Output file size: {self.output_path.stat().st_size} bytes")
+                # Store video data in job for Railway's ephemeral storage
+                try:
+                    with open(self.output_path, 'rb') as f:
+                        video_data = f.read()
+                    # Store as base64 for job storage
+                    import base64
+                    video_data_b64 = base64.b64encode(video_data).decode('utf-8')
+                    # This will be stored in the job object by the main.py
+                    print(f"Video data encoded and ready for storage")
+                except Exception as e:
+                    print(f"Warning: Could not encode video data: {e}")
+            else:
+                print("WARNING: Output file was not created!")
+            
             # Clean up temp files
             self._cleanup_temp_files()
             
             return {
                 "video_path": str(self.output_path),
                 "clips": clips_info,
-                "transcript": transcript
+                "transcript": transcript,
+                "video_data": video_data_b64 if self.output_path.exists() else None
             }
             
         except Exception as e:
@@ -422,7 +456,12 @@ Do not include any explanation or commentary—just the list of relevant timesta
                 "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_list_path),
                 "-c", "copy", str(self.output_path)
             ]
-            subprocess.run(concat_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(f"Running ffmpeg concat command: {' '.join(concat_cmd)}")
+            result = subprocess.run(concat_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(f"ffmpeg concat result: {result.returncode}")
+            print(f"Output file after concat: {self.output_path.exists()}")
+            if self.output_path.exists():
+                print(f"Output file size after concat: {self.output_path.stat().st_size} bytes")
 
             # Optionally, cleanup temp clips (but not self.output_path)
             for clip_path in temp_clips:

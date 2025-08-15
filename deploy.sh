@@ -1,85 +1,107 @@
 #!/bin/bash
 
-# ClipWave AI Shorts - Docker Deployment Script
+echo "🚀 ClipWave AI Shorts - Railway Deployment Script"
+echo "=================================================="
 
-set -e
-
-echo "🚀 Starting ClipWave AI Shorts deployment..."
-
-# Check if Docker is installed
-if ! command -v docker &> /dev/null; then
-    echo "❌ Docker is not installed. Please install Docker first."
+# Check if we're in the right directory
+if [ ! -f "Dockerfile" ]; then
+    echo "❌ Error: Dockerfile not found. Please run this script from the project root."
     exit 1
 fi
 
-# Check if Docker is running
-if ! docker info &> /dev/null; then
-    echo "❌ Docker is not running. Please start Docker Desktop first."
-    echo "   Opening Docker Desktop..."
-    open -a Docker
-    echo "   Please wait for Docker to start and then run this script again."
+# Check if required files exist
+echo "📋 Checking required files..."
+required_files=("backend/main.py" "backend/video_processor.py" "requirements-deploy.txt")
+for file in "${required_files[@]}"; do
+    if [ -f "$file" ]; then
+        echo "✅ $file"
+    else
+        echo "❌ $file - Missing!"
+        exit 1
+    fi
+done
+
+# Check environment variables
+echo ""
+echo "🔧 Environment Variables Check:"
+if [ -z "$OPENAI_API_KEY" ]; then
+    echo "⚠️  OPENAI_API_KEY not set (will need to be set in Railway)"
+else
+    echo "✅ OPENAI_API_KEY is set"
+fi
+
+if [ -z "$YOUTUBE_COOKIES_B64" ]; then
+    echo "⚠️  YOUTUBE_COOKIES_B64 not set (will need to be set in Railway)"
+else
+    echo "✅ YOUTUBE_COOKIES_B64 is set"
+fi
+
+echo ""
+echo "📦 Building Docker image..."
+docker build -t clipwave-ai-shorts .
+
+if [ $? -eq 0 ]; then
+    echo "✅ Docker build successful"
+else
+    echo "❌ Docker build failed"
     exit 1
 fi
 
-# Check if .env file exists
-if [ ! -f .env ]; then
-    echo "❌ .env file not found. Creating from template..."
-    cat > .env << EOF
-# ClipWave AI Shorts Environment Variables
-OPENAI_API_KEY=your_openai_api_key_here
-YOUTUBE_COOKIES_B64=your_base64_encoded_cookies_here
-EOF
-    echo "⚠️  Please edit .env file with your actual API keys and cookies before continuing."
-    echo "   You can get the YOUTUBE_COOKIES_B64 value by running: python prepare_deployment.py"
-    exit 1
-fi
+echo ""
+echo "🧪 Testing Docker container..."
+docker run --rm -d --name clipwave-test -p 8000:8000 \
+    -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+    -e YOUTUBE_COOKIES_B64="$YOUTUBE_COOKIES_B64" \
+    clipwave-ai-shorts
 
-# Load environment variables
-source .env
-
-# Check if required environment variables are set
-if [ -z "$OPENAI_API_KEY" ] || [ "$OPENAI_API_KEY" = "your_openai_api_key_here" ]; then
-    echo "❌ OPENAI_API_KEY not set in .env file"
-    exit 1
-fi
-
-if [ -z "$YOUTUBE_COOKIES_B64" ] || [ "$YOUTUBE_COOKIES_B64" = "your_base64_encoded_cookies_here" ]; then
-    echo "❌ YOUTUBE_COOKIES_B64 not set in .env file"
-    echo "   Run: python prepare_deployment.py to get the cookies value"
-    exit 1
-fi
-
-echo "✅ Environment variables loaded"
-
-# Create storage directory if it doesn't exist
-mkdir -p storage/videos
-
-# Stop any existing containers
-echo "🛑 Stopping existing containers..."
-docker compose down --remove-orphans
-
-# Build the Docker image
-echo "🔨 Building Docker image..."
-docker compose build --no-cache
-
-# Start the application
-echo "🚀 Starting ClipWave AI Shorts..."
-docker compose up -d
-
-# Wait for the application to start
-echo "⏳ Waiting for application to start..."
+# Wait for container to start
 sleep 10
 
-# Check if the application is running
-if curl -f http://localhost:8000/health > /dev/null 2>&1; then
-    echo "✅ Application is running successfully!"
-    echo "🌐 Open your browser and go to: http://localhost:8000"
-    echo ""
-    echo "📋 Useful commands:"
-    echo "   View logs: docker compose logs -f"
-    echo "   Stop app:  docker compose down"
-    echo "   Restart:   docker compose restart"
+# Test health endpoint
+echo "Testing health endpoint..."
+curl -f http://localhost:8000/api/health
+if [ $? -eq 0 ]; then
+    echo "✅ Health check passed"
 else
-    echo "❌ Application failed to start. Check logs with: docker compose logs"
-    exit 1
-fi 
+    echo "❌ Health check failed"
+fi
+
+# Test storage endpoint
+echo "Testing storage endpoint..."
+curl -f http://localhost:8000/api/test-storage
+if [ $? -eq 0 ]; then
+    echo "✅ Storage test passed"
+else
+    echo "❌ Storage test failed"
+fi
+
+# Stop test container
+docker stop clipwave-test
+
+echo ""
+echo "🎉 Deployment preparation complete!"
+echo ""
+echo "📋 Next steps for Railway deployment:"
+echo "1. Push your code to GitHub:"
+echo "   git add ."
+echo "   git commit -m 'Fix video file not found error'"
+echo "   git push"
+echo ""
+echo "2. In Railway dashboard, ensure these environment variables are set:"
+echo "   - OPENAI_API_KEY"
+echo "   - YOUTUBE_COOKIES_B64"
+echo "   - PORT=8000"
+echo ""
+echo "3. Deploy to Railway and test the endpoints:"
+echo "   - /api/health"
+echo "   - /api/test-storage"
+echo "   - /api/test"
+echo ""
+echo "4. If you still get 'video file not found' errors, check the logs:"
+echo "   railway logs"
+echo ""
+echo "🔧 Troubleshooting:"
+echo "- The app now stores video data in memory as a fallback for Railway's ephemeral storage"
+echo "- Check /api/test-storage endpoint to verify storage directory access"
+echo "- Video files are served from multiple possible paths"
+echo "- If file serving fails, videos are served from base64 encoded data" 

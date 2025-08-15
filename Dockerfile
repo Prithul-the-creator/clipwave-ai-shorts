@@ -41,6 +41,7 @@ RUN pip install --no-cache-dir -r backend/requirements-deploy.txt
 
 # Create storage directory
 RUN mkdir -p storage/videos
+RUN chmod 755 storage/videos
 
 # Expose port
 EXPOSE 8000
