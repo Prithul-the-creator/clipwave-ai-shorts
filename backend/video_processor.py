@@ -119,6 +119,26 @@ class VideoProcessor:
             # Get cookies (either from file or base64 encoded)
             cookies_file = self._create_temp_cookies_file()
             
+            # First, try to extract video info to validate the URL
+            info_opts = {
+                'quiet': True,
+                'no_warnings': True,
+                'extract_flat': True,
+            }
+            
+            if cookies_file:
+                info_opts['cookiefile'] = cookies_file
+            
+            try:
+                print("Validating YouTube URL...", flush=True)
+                with yt_dlp.YoutubeDL(info_opts) as ydl:
+                    info = ydl.extract_info(youtube_url, download=False)
+                    print(f"Video title: {info.get('title', 'Unknown')}", flush=True)
+                    print(f"Video duration: {info.get('duration', 'Unknown')} seconds", flush=True)
+            except Exception as e:
+                print(f"Warning: Could not extract video info: {e}", flush=True)
+                # Continue anyway, might still be able to download
+            
             # Base yt-dlp options
             ydl_opts = {
                 'outtmpl': output_path,
@@ -134,10 +154,26 @@ class VideoProcessor:
                 'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'http_headers': {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language': 'en-us,en;q=0.5',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.5',
+                    'Accept-Encoding': 'gzip, deflate',
+                    'DNT': '1',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1',
+                    'Sec-Fetch-Dest': 'document',
                     'Sec-Fetch-Mode': 'navigate',
-                }
+                    'Sec-Fetch-Site': 'none',
+                    'Sec-Fetch-User': '?1',
+                    'Cache-Control': 'max-age=0',
+                },
+                'socket_timeout': 30,
+                'retries': 3,
+                'fragment_retries': 3,
+                'skip_unavailable_fragments': True,
+                'keepvideo': False,
+                'writesubtitles': False,
+                'writeautomaticsub': False,
+                'ignoreerrors': True,  # Continue on errors
             }
             
             # Add cookies if available
@@ -162,19 +198,45 @@ class VideoProcessor:
                 print("Download successful", flush=True)
             except Exception as e:
                 print(f"Download failed: {e}", flush=True)
-                # Try without cookies if download failed
-                if cookies_file:
-                    print("Retrying download without cookies...", flush=True)
-                    ydl_opts.pop('cookiefile', None)
+                
+                # Try with different format if first attempt failed
+                if "403" in str(e) or "Forbidden" in str(e):
+                    print("403 error detected, trying with different format...", flush=True)
+                    ydl_opts['format'] = 'worst[height<=480]/worst'  # Try lower quality
                     try:
                         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                             ydl.download([youtube_url])
-                        print("Download successful without cookies", flush=True)
+                        print("Download successful with fallback format", flush=True)
                     except Exception as e2:
-                        print(f"Download failed even without cookies: {e2}", flush=True)
-                        raise e2
+                        print(f"Fallback format also failed: {e2}", flush=True)
+                        # Try without cookies if download failed
+                        if cookies_file:
+                            print("Retrying download without cookies...", flush=True)
+                            ydl_opts.pop('cookiefile', None)
+                            ydl_opts['format'] = 'best[height<=720]/best'  # Reset to original format
+                            try:
+                                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                                    ydl.download([youtube_url])
+                                print("Download successful without cookies", flush=True)
+                            except Exception as e3:
+                                print(f"Download failed even without cookies: {e3}", flush=True)
+                                raise e3
+                        else:
+                            raise e2
                 else:
-                    raise e
+                    # Try without cookies if download failed
+                    if cookies_file:
+                        print("Retrying download without cookies...", flush=True)
+                        ydl_opts.pop('cookiefile', None)
+                        try:
+                            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                                ydl.download([youtube_url])
+                            print("Download successful without cookies", flush=True)
+                        except Exception as e2:
+                            print(f"Download failed even without cookies: {e2}", flush=True)
+                            raise e2
+                    else:
+                        raise e
         
         # Run download in thread pool to avoid blocking
         loop = asyncio.get_event_loop()
