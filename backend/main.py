@@ -401,6 +401,133 @@ async def test_403_handling():
             ]
         }
 
+@app.get("/api/diagnose")
+async def diagnose_issues():
+    """Diagnose YouTube download issues"""
+    import subprocess
+    import base64
+    import json
+    
+    diagnosis = {
+        "environment": {},
+        "yt_dlp": {},
+        "network": {},
+        "cookies": {},
+        "recommendations": []
+    }
+    
+    # Environment check
+    diagnosis["environment"]["openai_key"] = "✅ Set" if os.getenv("OPENAI_API_KEY") else "❌ Missing"
+    diagnosis["environment"]["cookies_b64"] = "✅ Set" if os.getenv("YOUTUBE_COOKIES_B64") else "❌ Missing"
+    
+    if os.getenv("YOUTUBE_COOKIES_B64"):
+        cookies_b64 = os.getenv("YOUTUBE_COOKIES_B64")
+        diagnosis["environment"]["cookies_length"] = len(cookies_b64)
+        
+        try:
+            cookies_content = base64.b64decode(cookies_b64).decode('utf-8')
+            diagnosis["environment"]["decoded_size"] = len(cookies_content)
+            diagnosis["environment"]["cookie_lines"] = len(cookies_content.splitlines())
+            diagnosis["environment"]["cookies_valid"] = cookies_content.startswith('# Netscape HTTP Cookie File')
+        except Exception as e:
+            diagnosis["environment"]["cookies_error"] = str(e)
+    
+    # yt-dlp check
+    try:
+        result = subprocess.run(['yt-dlp', '--version'], capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            diagnosis["yt_dlp"]["version"] = result.stdout.strip()
+            diagnosis["yt_dlp"]["status"] = "✅ Working"
+        else:
+            diagnosis["yt_dlp"]["status"] = f"❌ Error: {result.stderr}"
+    except Exception as e:
+        diagnosis["yt_dlp"]["status"] = f"❌ Exception: {str(e)}"
+    
+    # Network connectivity test
+    import urllib.request
+    test_urls = ["https://www.youtube.com", "https://www.google.com"]
+    
+    for url in test_urls:
+        try:
+            response = urllib.request.urlopen(url, timeout=10)
+            diagnosis["network"][url] = f"✅ Status: {response.getcode()}"
+        except Exception as e:
+            diagnosis["network"][url] = f"❌ Error: {str(e)}"
+    
+    # Test basic yt-dlp functionality
+    test_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    try:
+        cmd = ['yt-dlp', '--dump-json', '--no-playlist', test_url]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        
+        if result.returncode == 0:
+            try:
+                info = json.loads(result.stdout)
+                diagnosis["yt_dlp"]["info_extraction"] = "✅ Success"
+                diagnosis["yt_dlp"]["video_title"] = info.get('title', 'Unknown')
+                diagnosis["yt_dlp"]["video_duration"] = info.get('duration', 'Unknown')
+            except json.JSONDecodeError:
+                diagnosis["yt_dlp"]["info_extraction"] = "⚠️ Success but couldn't parse JSON"
+        else:
+            diagnosis["yt_dlp"]["info_extraction"] = f"❌ Failed: {result.stderr[:200]}"
+    except Exception as e:
+        diagnosis["yt_dlp"]["info_extraction"] = f"❌ Exception: {str(e)}"
+    
+    # Test cookies effectiveness
+    if os.getenv("YOUTUBE_COOKIES_B64"):
+        try:
+            cookies_content = base64.b64decode(os.getenv("YOUTUBE_COOKIES_B64")).decode('utf-8')
+            cookies_file = "/tmp/diagnose_cookies.txt"
+            with open(cookies_file, 'w') as f:
+                f.write(cookies_content)
+            
+            cmd = [
+                'yt-dlp',
+                '--cookies', cookies_file,
+                '--format', 'best[height<=480]',
+                '--output', '/tmp/diagnose_test.mp4',
+                '--quiet',
+                test_url
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            
+            if result.returncode == 0 and os.path.exists('/tmp/diagnose_test.mp4'):
+                file_size = os.path.getsize('/tmp/diagnose_test.mp4')
+                diagnosis["cookies"]["download_test"] = f"✅ Success ({file_size} bytes)"
+                os.remove('/tmp/diagnose_test.mp4')
+            else:
+                diagnosis["cookies"]["download_test"] = f"❌ Failed: {result.stderr[:200]}"
+            
+            os.remove(cookies_file)
+        except Exception as e:
+            diagnosis["cookies"]["download_test"] = f"❌ Exception: {str(e)}"
+    else:
+        diagnosis["cookies"]["download_test"] = "⚠️ No cookies to test"
+    
+    # Generate recommendations
+    if not diagnosis["environment"]["openai_key"].startswith("✅"):
+        diagnosis["recommendations"].append("Set OPENAI_API_KEY environment variable")
+    
+    if not diagnosis["environment"]["cookies_b64"].startswith("✅"):
+        diagnosis["recommendations"].append("Set YOUTUBE_COOKIES_B64 environment variable")
+    
+    if not diagnosis["yt_dlp"]["status"].startswith("✅"):
+        diagnosis["recommendations"].append("Fix yt-dlp installation")
+    
+    if any("❌" in status for status in diagnosis["network"].values()):
+        diagnosis["recommendations"].append("Check network connectivity")
+    
+    if diagnosis["yt_dlp"].get("info_extraction", "").startswith("❌"):
+        diagnosis["recommendations"].append("YouTube may be blocking requests - try different video or wait")
+    
+    if diagnosis["cookies"].get("download_test", "").startswith("❌"):
+        diagnosis["recommendations"].append("Cookies may be invalid or expired - refresh them")
+    
+    if not diagnosis["recommendations"]:
+        diagnosis["recommendations"].append("All systems appear to be working correctly")
+    
+    return diagnosis
+
 # Serve static assets (CSS, JS files)
 @app.get("/assets/{file_path:path}")
 async def serve_assets(file_path: str):
