@@ -9,7 +9,11 @@ export const useJobQueue = (userId?: string) => {
 
   // Load initial jobs
   useEffect(() => {
-    loadJobs();
+    if (userId) {
+      loadJobs();
+    } else {
+      setJobs([]);
+    }
   }, [userId]);
 
   const loadJobs = useCallback(async () => {
@@ -17,9 +21,10 @@ export const useJobQueue = (userId?: string) => {
       setLoading(true);
       setError(null);
       const response = await apiClient.listJobs(userId);
-      setJobs(response.jobs);
+      setJobs(response?.jobs || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load jobs');
+      setJobs([]); // Ensure jobs is always an array
     } finally {
       setLoading(false);
     }

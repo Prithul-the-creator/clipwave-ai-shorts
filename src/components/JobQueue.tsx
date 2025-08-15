@@ -69,7 +69,7 @@ export const JobQueue = ({ jobs, currentJob, onJobSelect, onJobDelete, loading =
       </CardHeader>
       <CardContent>
         <div className="space-y-4 max-h-[600px] overflow-y-auto">
-          {jobs.length === 0 ? (
+          {!jobs || jobs.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <p>No jobs yet</p>
               <p className="text-sm">Submit a YouTube URL to get started</p>

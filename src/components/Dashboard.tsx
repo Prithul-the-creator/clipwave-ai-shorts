@@ -33,7 +33,7 @@ export const Dashboard = ({ user }: DashboardProps) => {
   const currentJob = currentJobId ? jobs.find(job => job.id === currentJobId) || null : null;
 
   useEffect(() => {
-    if (!currentJobId && jobs.length > 0) {
+    if (!currentJobId && jobs && jobs.length > 0) {
       setCurrentJobId(jobs[0].id);
     }
   }, [jobs, currentJobId]);
