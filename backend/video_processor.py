@@ -258,9 +258,41 @@ class VideoProcessor:
             
             download_successful = False
             
-            # Strategy 1: Try with cookies first
+            # Strategy 1: Try WITHOUT cookies first (since they might be causing issues)
+            print("Strategy 1: Trying WITHOUT cookies...", flush=True)
+            try:
+                ydl_opts = base_ydl_opts.copy()
+                ydl_opts.pop('cookiefile', None)  # Remove cookies
+                ydl_opts['user_agent'] = user_agents[0]
+                ydl_opts['format'] = format_strategies[0]
+                ydl_opts['http_headers'] = {
+                    'User-Agent': user_agents[0],
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.5',
+                    'Accept-Encoding': 'gzip, deflate',
+                    'DNT': '1',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1',
+                    'Sec-Fetch-Dest': 'document',
+                    'Sec-Fetch-Mode': 'navigate',
+                    'Sec-Fetch-Site': 'none',
+                    'Sec-Fetch-User': '?1',
+                    'Cache-Control': 'max-age=0',
+                }
+                
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([youtube_url])
+                
+                if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                    print("Download successful WITHOUT cookies", flush=True)
+                    download_successful = True
+                    return
+            except Exception as e:
+                print(f"Strategy 1 (no cookies) failed: {e}", flush=True)
+            
+            # Strategy 2: Try with cookies (only if available)
             if cookies_file:
-                print("Strategy 1: Trying with cookies...", flush=True)
+                print("Strategy 2: Trying with cookies...", flush=True)
                 try:
                     ydl_opts = base_ydl_opts.copy()
                     ydl_opts['user_agent'] = user_agents[0]
@@ -288,10 +320,10 @@ class VideoProcessor:
                         download_successful = True
                         return
                 except Exception as e:
-                    print(f"Strategy 1 failed: {e}", flush=True)
+                    print(f"Strategy 2 (with cookies) failed: {e}", flush=True)
             
-            # Strategy 2: Try different user agents and formats without cookies
-            print("Strategy 2: Trying different user agents and formats...", flush=True)
+            # Strategy 3: Try different user agents and formats without cookies
+            print("Strategy 3: Trying different user agents and formats...", flush=True)
             for user_agent in user_agents[:3]:  # Try first 3 user agents
                 for format_strategy in format_strategies[:4]:  # Try first 4 format strategies
                     try:
@@ -327,8 +359,8 @@ class VideoProcessor:
                         print(f"Failed with user agent {user_agent[:50]}... and format {format_strategy}: {e}", flush=True)
                         continue
             
-            # Strategy 3: Try with different extraction methods
-            print("Strategy 3: Trying different extraction methods...", flush=True)
+            # Strategy 4: Try with different extraction methods
+            print("Strategy 4: Trying different extraction methods...", flush=True)
             extraction_methods = [
                 {'extractor_args': {'youtube': {'skip': ['dash', 'live']}}},
                 {'extractor_args': {'youtube': {'player_client': ['android']}}},
@@ -357,8 +389,8 @@ class VideoProcessor:
                     print(f"Extraction method failed: {e}", flush=True)
                     continue
             
-            # Strategy 4: Try with minimal options (last resort)
-            print("Strategy 4: Trying with minimal options...", flush=True)
+            # Strategy 5: Try with minimal options (last resort)
+            print("Strategy 5: Trying with minimal options...", flush=True)
             try:
                 minimal_opts = {
                     'outtmpl': output_path,
