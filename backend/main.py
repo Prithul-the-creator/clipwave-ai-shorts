@@ -170,8 +170,11 @@ async def process_video_job(job_id: str, youtube_url: str, instructions: str, us
 @app.get("/api/jobs")
 async def get_jobs(user_id: str):
     """Get all jobs for a user"""
+    print(f"get_jobs called with user_id: {user_id}")
+    print(f"All jobs: {jobs}")
     user_jobs = [job for job in jobs.values() if job["user_id"] == user_id]
-    return user_jobs
+    print(f"User jobs: {user_jobs}")
+    return {"jobs": user_jobs}
 
 @app.get("/api/jobs/{job_id}")
 async def get_job(job_id: str, user_id: str):
