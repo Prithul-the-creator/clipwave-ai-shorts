@@ -528,6 +528,134 @@ async def diagnose_issues():
     
     return diagnosis
 
+@app.get("/api/test-simple")
+async def test_simple_download():
+    """Simple test to check if basic yt-dlp works on Railway"""
+    import subprocess
+    import tempfile
+    import os
+    
+    test_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    
+    result = {
+        "yt_dlp_version": "Unknown",
+        "yt_dlp_working": False,
+        "info_extraction": False,
+        "download_test": False,
+        "error": None
+    }
+    
+    # Test 1: Check yt-dlp version
+    try:
+        version_result = subprocess.run(['yt-dlp', '--version'], capture_output=True, text=True, timeout=10)
+        if version_result.returncode == 0:
+            result["yt_dlp_version"] = version_result.stdout.strip()
+            result["yt_dlp_working"] = True
+        else:
+            result["error"] = f"yt-dlp version check failed: {version_result.stderr}"
+            return result
+    except Exception as e:
+        result["error"] = f"yt-dlp not available: {str(e)}"
+        return result
+    
+    # Test 2: Extract video info
+    try:
+        info_cmd = ['yt-dlp', '--dump-json', '--no-playlist', test_url]
+        info_result = subprocess.run(info_cmd, capture_output=True, text=True, timeout=30)
+        
+        if info_result.returncode == 0:
+            import json
+            info = json.loads(info_result.stdout)
+            result["info_extraction"] = True
+            result["video_title"] = info.get('title', 'Unknown')
+            result["video_duration"] = info.get('duration', 'Unknown')
+        else:
+            result["error"] = f"Info extraction failed: {info_result.stderr[:200]}"
+            return result
+    except Exception as e:
+        result["error"] = f"Info extraction error: {str(e)}"
+        return result
+    
+    # Test 3: Try simple download
+    try:
+        with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp_file:
+            download_cmd = [
+                'yt-dlp',
+                '--format', 'worst[height<=360]',  # Use worst quality for faster test
+                '--output', tmp_file.name,
+                '--quiet',
+                test_url
+            ]
+            
+            download_result = subprocess.run(download_cmd, capture_output=True, text=True, timeout=60)
+            
+            if download_result.returncode == 0 and os.path.exists(tmp_file.name):
+                file_size = os.path.getsize(tmp_file.name)
+                result["download_test"] = True
+                result["file_size"] = file_size
+                os.unlink(tmp_file.name)  # Clean up
+            else:
+                result["error"] = f"Download failed: {download_result.stderr[:200]}"
+    except Exception as e:
+        result["error"] = f"Download error: {str(e)}"
+    
+    return result
+
+@app.get("/api/test-no-cookies")
+async def test_without_cookies():
+    """Test download without any cookies to see if they're causing issues"""
+    import subprocess
+    import tempfile
+    import os
+    
+    test_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    
+    result = {
+        "test_type": "Download without cookies",
+        "success": False,
+        "file_size": 0,
+        "error": None,
+        "command_used": ""
+    }
+    
+    try:
+        with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp_file:
+            # Create a clean environment without cookies
+            env = os.environ.copy()
+            env.pop('YOUTUBE_COOKIES_B64', None)  # Remove cookies from environment
+            
+            download_cmd = [
+                'yt-dlp',
+                '--format', 'worst[height<=360]',  # Use worst quality for faster test
+                '--output', tmp_file.name,
+                '--quiet',
+                '--no-warnings',
+                test_url
+            ]
+            
+            result["command_used"] = ' '.join(download_cmd)
+            
+            download_result = subprocess.run(
+                download_cmd, 
+                capture_output=True, 
+                text=True, 
+                timeout=60,
+                env=env  # Use clean environment
+            )
+            
+            if download_result.returncode == 0 and os.path.exists(tmp_file.name):
+                file_size = os.path.getsize(tmp_file.name)
+                result["success"] = True
+                result["file_size"] = file_size
+                os.unlink(tmp_file.name)  # Clean up
+            else:
+                result["error"] = f"Download failed: {download_result.stderr[:300]}"
+                
+    except Exception as e:
+        result["error"] = f"Download error: {str(e)}"
+    
+    return result
+
 # Serve static assets (CSS, JS files)
 @app.get("/assets/{file_path:path}")
 async def serve_assets(file_path: str):
