@@ -70,15 +70,6 @@ async def api_health_check():
     print("API health check endpoint called")
     return {"status": "healthy", "message": "ClipWave AI Shorts API is running"}
 
-@app.get("/")
-async def read_root():
-    """Serve the frontend application"""
-    if os.path.exists("dist/index.html"):
-        return FileResponse("dist/index.html")
-    elif os.path.exists("../dist/index.html"):
-        return FileResponse("../dist/index.html")
-    return {"message": "ClipWave AI Shorts API"}
-
 @app.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
     await manager.connect(websocket, user_id)
@@ -233,11 +224,32 @@ async def delete_job(job_id: str, user_id: str):
     del jobs[job_id]
     return {"message": "Job deleted"}
 
-# Mount static files for frontend (after all API routes)
-if os.path.exists("dist"):
-    app.mount("/", StaticFiles(directory="dist", html=True), name="static")
-elif os.path.exists("../dist"):
-    app.mount("/", StaticFiles(directory="../dist", html=True), name="static")
+# Serve static assets (CSS, JS files)
+@app.get("/assets/{file_path:path}")
+async def serve_assets(file_path: str):
+    """Serve static assets from dist/assets directory"""
+    if os.path.exists(f"dist/assets/{file_path}"):
+        return FileResponse(f"dist/assets/{file_path}")
+    elif os.path.exists(f"../dist/assets/{file_path}"):
+        return FileResponse(f"../dist/assets/{file_path}")
+    else:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+# SPA routing - serve index.html for all non-API routes
+@app.get("/{full_path:path}")
+async def catch_all(full_path: str):
+    """Serve index.html for all non-API routes to support SPA routing"""
+    # Don't serve index.html for API routes
+    if full_path.startswith("api/") or full_path.startswith("ws/"):
+        raise HTTPException(status_code=404, detail="Not Found")
+    
+    # Serve index.html for all other routes (SPA routing)
+    if os.path.exists("dist/index.html"):
+        return FileResponse("dist/index.html")
+    elif os.path.exists("../dist/index.html"):
+        return FileResponse("../dist/index.html")
+    else:
+        raise HTTPException(status_code=404, detail="Not Found")
 
 if __name__ == "__main__":
     import uvicorn
