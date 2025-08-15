@@ -42,7 +42,7 @@ class VideoProcessor:
             try:
                 cookies_content = base64.b64decode(cookies_b64).decode('utf-8')
                 cookies_file = self.temp_dir / "cookies.txt"
-                with open(cookies_file, 'w') as f:
+                with open(cookies_file, 'w', encoding='utf-8') as f:
                     f.write(cookies_content)
                 print(f"Using base64-encoded cookies from environment variable")
                 return str(cookies_file)
@@ -54,6 +54,19 @@ class VideoProcessor:
         if cookies_file and os.path.exists(cookies_file):
             print(f"Using cookies from file: {cookies_file}")
             return cookies_file
+        
+        # Try to find cookies.txt in common locations
+        common_paths = [
+            "cookies.txt",
+            "../cookies.txt",
+            "backend/cookies.txt",
+            "/app/cookies.txt"
+        ]
+        
+        for path in common_paths:
+            if os.path.exists(path):
+                print(f"Using cookies from: {path}")
+                return path
         
         print("No cookies found - YouTube downloads may fail for restricted videos")
         return None
@@ -131,6 +144,16 @@ class VideoProcessor:
             if cookies_file:
                 ydl_opts['cookiefile'] = cookies_file
                 print(f"Using cookies from: {cookies_file}")
+                # Verify cookies file format
+                try:
+                    with open(cookies_file, 'r', encoding='utf-8') as f:
+                        first_line = f.readline().strip()
+                        if not first_line.startswith('# Netscape HTTP Cookie File'):
+                            print(f"Warning: Cookies file may not be in correct format. First line: {first_line[:50]}...")
+                except Exception as e:
+                    print(f"Warning: Could not verify cookies file format: {e}")
+            else:
+                print("No cookies file available - some videos may fail to download")
             
             try:
                 print("Attempting to download video...", flush=True)
@@ -139,7 +162,19 @@ class VideoProcessor:
                 print("Download successful", flush=True)
             except Exception as e:
                 print(f"Download failed: {e}", flush=True)
-                raise e
+                # Try without cookies if download failed
+                if cookies_file:
+                    print("Retrying download without cookies...", flush=True)
+                    ydl_opts.pop('cookiefile', None)
+                    try:
+                        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                            ydl.download([youtube_url])
+                        print("Download successful without cookies", flush=True)
+                    except Exception as e2:
+                        print(f"Download failed even without cookies: {e2}", flush=True)
+                        raise e2
+                else:
+                    raise e
         
         # Run download in thread pool to avoid blocking
         loop = asyncio.get_event_loop()
