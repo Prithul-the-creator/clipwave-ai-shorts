@@ -50,6 +50,12 @@ class VideoProcessor:
     
     def _create_temp_cookies_file(self) -> Optional[str]:
         """Create temporary cookies file from environment variable or file"""
+        # TEMPORARY: Disable cookies to test if they're causing issues
+        disable_cookies = os.getenv("DISABLE_COOKIES", "false").lower() == "true"
+        if disable_cookies:
+            print("🍪 Cookies disabled for testing")
+            return None
+        
         # First try base64 encoded cookies (for deployment)
         cookies_b64 = os.getenv("YOUTUBE_COOKIES_B64")
         if cookies_b64:
