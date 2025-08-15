@@ -353,7 +353,9 @@ Do not include any explanation or commentary—just the list of relevant timesta
                         "role": "user",
                         "content": prompt
                     }
-                ]
+                ],
+                max_tokens=500,
+                temperature=0.1
             )
             
             print("GPT RESPONSE:", completion.choices[0].message.content, flush=True)
