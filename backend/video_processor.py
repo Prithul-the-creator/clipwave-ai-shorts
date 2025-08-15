@@ -170,7 +170,7 @@ class VideoProcessor:
             raise e
     
     async def _download_youtube_video(self, youtube_url: str, output_path: str):
-        """Download YouTube video with cookie support"""
+        """Download YouTube video with cookie support and comprehensive 403 error handling"""
         def download():
             # Get cookies (either from file or base64 encoded)
             cookies_file = self._create_temp_cookies_file()
@@ -195,33 +195,37 @@ class VideoProcessor:
                 print(f"Warning: Could not extract video info: {e}", flush=True)
                 # Continue anyway, might still be able to download
             
+            # Multiple user agents to try
+            user_agents = [
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0',
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/121.0'
+            ]
+            
+            # Multiple format strategies to try
+            format_strategies = [
+                'best[height<=720]/best',
+                'worst[height<=480]/worst',
+                'best[height<=480]/best',
+                'worst[height<=360]/worst',
+                'best[ext=mp4]/best',
+                'best[ext=webm]/best',
+                'best'
+            ]
+            
             # Base yt-dlp options
-            ydl_opts = {
+            base_ydl_opts = {
                 'outtmpl': output_path,
                 'merge_output_format': 'mp4',
-                'format': 'best[height<=720]/best',
                 'nocheckcertificate': True,
-                'ignoreerrors': False,  # Changed to False to catch errors
+                'ignoreerrors': False,
                 'no_warnings': False,
                 'quiet': False,
                 'verbose': True,
                 'extract_flat': False,
                 'force_generic_extractor': False,
-                'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.5',
-                    'Accept-Encoding': 'gzip, deflate',
-                    'DNT': '1',
-                    'Connection': 'keep-alive',
-                    'Upgrade-Insecure-Requests': '1',
-                    'Sec-Fetch-Dest': 'document',
-                    'Sec-Fetch-Mode': 'navigate',
-                    'Sec-Fetch-Site': 'none',
-                    'Sec-Fetch-User': '?1',
-                    'Cache-Control': 'max-age=0',
-                },
                 'socket_timeout': 30,
                 'retries': 3,
                 'fragment_retries': 3,
@@ -239,7 +243,7 @@ class VideoProcessor:
             
             # Add cookies if available
             if cookies_file:
-                ydl_opts['cookiefile'] = cookies_file
+                base_ydl_opts['cookiefile'] = cookies_file
                 print(f"Using cookies from: {cookies_file}")
                 # Verify cookies file format
                 try:
@@ -254,132 +258,129 @@ class VideoProcessor:
             
             download_successful = False
             
+            # Strategy 1: Try with cookies first
+            if cookies_file:
+                print("Strategy 1: Trying with cookies...", flush=True)
+                try:
+                    ydl_opts = base_ydl_opts.copy()
+                    ydl_opts['user_agent'] = user_agents[0]
+                    ydl_opts['format'] = format_strategies[0]
+                    ydl_opts['http_headers'] = {
+                        'User-Agent': user_agents[0],
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.5',
+                        'Accept-Encoding': 'gzip, deflate',
+                        'DNT': '1',
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1',
+                        'Sec-Fetch-Dest': 'document',
+                        'Sec-Fetch-Mode': 'navigate',
+                        'Sec-Fetch-Site': 'none',
+                        'Sec-Fetch-User': '?1',
+                        'Cache-Control': 'max-age=0',
+                    }
+                    
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([youtube_url])
+                    
+                    if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                        print("Download successful with cookies", flush=True)
+                        download_successful = True
+                        return
+                except Exception as e:
+                    print(f"Strategy 1 failed: {e}", flush=True)
+            
+            # Strategy 2: Try different user agents and formats without cookies
+            print("Strategy 2: Trying different user agents and formats...", flush=True)
+            for user_agent in user_agents[:3]:  # Try first 3 user agents
+                for format_strategy in format_strategies[:4]:  # Try first 4 format strategies
+                    try:
+                        ydl_opts = base_ydl_opts.copy()
+                        ydl_opts.pop('cookiefile', None)  # Remove cookies
+                        ydl_opts['user_agent'] = user_agent
+                        ydl_opts['format'] = format_strategy
+                        ydl_opts['http_headers'] = {
+                            'User-Agent': user_agent,
+                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                            'Accept-Language': 'en-US,en;q=0.5',
+                            'Accept-Encoding': 'gzip, deflate',
+                            'DNT': '1',
+                            'Connection': 'keep-alive',
+                            'Upgrade-Insecure-Requests': '1',
+                            'Sec-Fetch-Dest': 'document',
+                            'Sec-Fetch-Mode': 'navigate',
+                            'Sec-Fetch-Site': 'none',
+                            'Sec-Fetch-User': '?1',
+                            'Cache-Control': 'max-age=0',
+                        }
+                        
+                        print(f"Trying user agent: {user_agent[:50]}... with format: {format_strategy}", flush=True)
+                        
+                        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                            ydl.download([youtube_url])
+                        
+                        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                            print(f"Download successful with user agent: {user_agent[:50]}... and format: {format_strategy}", flush=True)
+                            download_successful = True
+                            return
+                    except Exception as e:
+                        print(f"Failed with user agent {user_agent[:50]}... and format {format_strategy}: {e}", flush=True)
+                        continue
+            
+            # Strategy 3: Try with different extraction methods
+            print("Strategy 3: Trying different extraction methods...", flush=True)
+            extraction_methods = [
+                {'extractor_args': {'youtube': {'skip': ['dash', 'live']}}},
+                {'extractor_args': {'youtube': {'player_client': ['android']}}},
+                {'extractor_args': {'youtube': {'player_client': ['web']}}},
+                {'extractor_args': {'youtube': {'player_client': ['tv_embedded']}}},
+            ]
+            
+            for method in extraction_methods:
+                try:
+                    ydl_opts = base_ydl_opts.copy()
+                    ydl_opts.pop('cookiefile', None)
+                    ydl_opts['user_agent'] = user_agents[0]
+                    ydl_opts['format'] = 'best[height<=480]/best'
+                    ydl_opts.update(method)
+                    
+                    print(f"Trying extraction method: {method}", flush=True)
+                    
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([youtube_url])
+                    
+                    if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                        print(f"Download successful with extraction method: {method}", flush=True)
+                        download_successful = True
+                        return
+                except Exception as e:
+                    print(f"Extraction method failed: {e}", flush=True)
+                    continue
+            
+            # Strategy 4: Try with minimal options (last resort)
+            print("Strategy 4: Trying with minimal options...", flush=True)
             try:
-                print("Attempting to download video...", flush=True)
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                minimal_opts = {
+                    'outtmpl': output_path,
+                    'format': 'best',
+                    'quiet': False,
+                    'no_warnings': False,
+                    'verbose': True,
+                }
+                
+                with yt_dlp.YoutubeDL(minimal_opts) as ydl:
                     ydl.download([youtube_url])
                 
-                # Check if the file was actually created
-                if not os.path.exists(output_path):
-                    # Try to find the file with different extensions
-                    possible_paths = [
-                        output_path,
-                        output_path.replace('.mp4', '.webm'),
-                        output_path.replace('.mp4', '.mkv'),
-                        str(self.temp_dir / "input.webm"),
-                        str(self.temp_dir / "input.mkv"),
-                    ]
-                    
-                    found_file = None
-                    for path in possible_paths:
-                        if os.path.exists(path):
-                            found_file = path
-                            break
-                    
-                    if found_file:
-                        print(f"Found downloaded file at: {found_file}", flush=True)
-                        # Rename to expected path if needed
-                        if found_file != output_path:
-                            os.rename(found_file, output_path)
-                        download_successful = True
-                    else:
-                        # List files in temp directory for debugging
-                        print(f"Files in temp directory: {list(self.temp_dir.glob('*'))}", flush=True)
-                        raise Exception(f"Download appeared successful but file not found at {output_path}")
-                else:
+                if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                    print("Download successful with minimal options", flush=True)
                     download_successful = True
-                
-                if download_successful:
-                    print("Download successful", flush=True)
-                    # Verify file is not empty
-                    if os.path.getsize(output_path) == 0:
-                        raise Exception("Downloaded file is empty")
-                    
+                    return
             except Exception as e:
-                print(f"Download failed: {e}", flush=True)
-                
-                # Check if it's a cookies-related error
-                cookies_error = any(keyword in str(e).lower() for keyword in [
-                    'cookies', 'netscape', 'invalid length', 'malformed'
-                ])
-                
-                if cookies_error and cookies_file:
-                    print("Cookies error detected, retrying without cookies...", flush=True)
-                    ydl_opts.pop('cookiefile', None)
-                    try:
-                        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                            ydl.download([youtube_url])
-                        
-                        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-                            print("Download successful without cookies", flush=True)
-                            download_successful = True
-                        else:
-                            raise Exception("Download without cookies failed - file not created or empty")
-                    except Exception as e2:
-                        print(f"Download without cookies also failed: {e2}", flush=True)
-                        raise e2
-                
-                # Try with different format if first attempt failed
-                elif "403" in str(e) or "Forbidden" in str(e):
-                    print("403 error detected, trying with different format...", flush=True)
-                    ydl_opts['format'] = 'worst[height<=480]/worst'  # Try lower quality
-                    try:
-                        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                            ydl.download([youtube_url])
-                        
-                        # Check if download was successful
-                        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-                            print("Download successful with fallback format", flush=True)
-                            download_successful = True
-                        else:
-                            raise Exception("Fallback download failed - file not created or empty")
-                            
-                    except Exception as e2:
-                        print(f"Fallback format also failed: {e2}", flush=True)
-                        # Try without cookies if download failed
-                        if cookies_file:
-                            print("Retrying download without cookies...", flush=True)
-                            ydl_opts.pop('cookiefile', None)
-                            ydl_opts['format'] = 'best[height<=720]/best'  # Reset to original format
-                            try:
-                                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                                    ydl.download([youtube_url])
-                                
-                                if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-                                    print("Download successful without cookies", flush=True)
-                                    download_successful = True
-                                else:
-                                    raise Exception("Download without cookies failed - file not created or empty")
-                                    
-                            except Exception as e3:
-                                print(f"Download failed even without cookies: {e3}", flush=True)
-                                raise e3
-                        else:
-                            raise e2
-                else:
-                    # Try without cookies if download failed
-                    if cookies_file:
-                        print("Retrying download without cookies...", flush=True)
-                        ydl_opts.pop('cookiefile', None)
-                        try:
-                            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                                ydl.download([youtube_url])
-                            
-                            if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-                                print("Download successful without cookies", flush=True)
-                                download_successful = True
-                            else:
-                                raise Exception("Download without cookies failed - file not created or empty")
-                                
-                        except Exception as e2:
-                            print(f"Download failed even without cookies: {e2}", flush=True)
-                            raise e2
-                    else:
-                        raise e
+                print(f"Minimal options failed: {e}", flush=True)
             
-            # Final verification
-            if not download_successful or not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
-                raise Exception(f"Video download failed completely. File exists: {os.path.exists(output_path)}, Size: {os.path.getsize(output_path) if os.path.exists(output_path) else 0}")
+            # If all strategies failed
+            if not download_successful:
+                raise Exception("All download strategies failed. This video may be restricted or unavailable.")
         
         # Run download in thread pool to avoid blocking
         loop = asyncio.get_event_loop()

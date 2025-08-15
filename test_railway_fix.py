@@ -122,6 +122,51 @@ async def test_video_download():
         except Exception as e:
             print(f"Warning: Could not clean up temp directory: {e}")
 
+async def test_403_handling():
+    """Test 403 error handling strategies"""
+    print("\n🛡️ Testing 403 error handling...")
+    
+    # Test with a potentially restricted video
+    test_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    
+    try:
+        processor = VideoProcessor("test-403-handling")
+        print(f"✅ VideoProcessor initialized for 403 test")
+        print(f"   Temp directory: {processor.temp_dir}")
+        print(f"   Expected video path: {processor.video_path}")
+        
+        # Test download with comprehensive 403 handling
+        print("Starting 403 handling test...")
+        await processor._download_youtube_video(test_url, str(processor.video_path))
+        
+        # Check if file was created
+        if processor.video_path.exists():
+            file_size = processor.video_path.stat().st_size
+            print(f"✅ 403 handling test successful! File size: {file_size} bytes")
+            
+            if file_size > 0:
+                print("✅ File is not empty")
+                return True
+            else:
+                print("❌ File is empty")
+                return False
+        else:
+            print("❌ File was not created")
+            return False
+            
+    except Exception as e:
+        print(f"❌ 403 handling test failed: {e}")
+        return False
+    finally:
+        # Clean up
+        try:
+            if processor.temp_dir.exists():
+                import shutil
+                shutil.rmtree(processor.temp_dir)
+                print("✅ Cleaned up temp directory")
+        except Exception as e:
+            print(f"Warning: Could not clean up temp directory: {e}")
+
 def test_imports():
     """Test that all required modules can be imported"""
     print("\n📦 Testing imports...")
@@ -169,9 +214,16 @@ async def main():
     # Test video download (optional - requires internet)
     print("\n" + "="*50)
     print("📥 Video Download Test (requires internet connection)")
-    print("="*50)
+    print("=" * 50)
     
     download_success = await test_video_download()
+    
+    # Test 403 error handling
+    print("\n" + "="*50)
+    print("🛡️ 403 Error Handling Test")
+    print("=" * 50)
+    
+    error_handling_success = await test_403_handling()
     
     print("\n🎉 All tests completed!")
     print("\n📋 Summary:")
@@ -180,12 +232,14 @@ async def main():
     print("- Video data is stored in memory as a fallback")
     print("- Multiple file paths are checked when serving videos")
     print(f"- Video download test: {'✅ PASSED' if download_success else '❌ FAILED'}")
+    print(f"- 403 error handling test: {'✅ PASSED' if error_handling_success else '❌ FAILED'}")
     
     print("\n🔧 Next steps:")
     print("1. Deploy to Railway")
     print("2. Test the /api/test-storage endpoint")
-    print("3. Process a video and check if it's served correctly")
-    print("4. Check Railway logs for any remaining issues")
+    print("3. Test the /api/test-403-handling endpoint")
+    print("4. Process a video and check if it's served correctly")
+    print("5. Check Railway logs for any remaining issues")
     
     if not download_success:
         print("\n⚠️  Video download test failed. This might indicate:")
@@ -193,6 +247,13 @@ async def main():
         print("- YouTube download restrictions")
         print("- Missing or invalid cookies")
         print("- yt-dlp version issues")
+    
+    if not error_handling_success:
+        print("\n⚠️  403 error handling test failed. This might indicate:")
+        print("- YouTube has blocked the IP address")
+        print("- Video is age-restricted or private")
+        print("- Rate limiting from YouTube")
+        print("- Need for additional user agents or formats")
 
 if __name__ == "__main__":
     asyncio.run(main()) 

@@ -356,6 +356,51 @@ async def test_download():
             "error_type": type(e).__name__
         }
 
+@app.get("/api/test-403-handling")
+async def test_403_handling():
+    """Test 403 error handling with different strategies"""
+    try:
+        from video_processor import VideoProcessor
+        
+        # Test with a potentially restricted video
+        test_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        
+        processor = VideoProcessor("test-403-api")
+        
+        # Test download with comprehensive 403 handling
+        await processor._download_youtube_video(test_url, str(processor.video_path))
+        
+        # Check if file was created
+        if processor.video_path.exists():
+            file_size = processor.video_path.stat().st_size
+            return {
+                "status": "success",
+                "message": "403 handling test successful",
+                "file_size": file_size,
+                "file_path": str(processor.video_path),
+                "strategies_used": "Multiple strategies attempted successfully"
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "403 handling test failed - no file created",
+                "temp_dir": str(processor.temp_dir),
+                "files_in_temp": list(processor.temp_dir.glob('*')) if processor.temp_dir.exists() else []
+            }
+            
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"403 handling test failed: {str(e)}",
+            "error_type": type(e).__name__,
+            "suggestions": [
+                "Try with a different YouTube URL",
+                "Check if the video is age-restricted",
+                "Verify the video is publicly accessible",
+                "Consider using a VPN or different IP"
+            ]
+        }
+
 # Serve static assets (CSS, JS files)
 @app.get("/assets/{file_path:path}")
 async def serve_assets(file_path: str):
