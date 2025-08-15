@@ -100,7 +100,7 @@ export const AuthModal = ({ isOpen, onClose, onLogin }: AuthModalProps) => {
             }
           }}
           providers={["google"]}
-          redirectTo={window.location.origin}
+          redirectTo={`${window.location.origin}/auth/callback`}
         />
       </DialogContent>
     </Dialog>
