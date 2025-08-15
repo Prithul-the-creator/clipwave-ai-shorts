@@ -71,10 +71,7 @@ async def api_health_check():
     return {"status": "healthy", "message": "ClipWave AI Shorts API is running"}
 
 # Mount static files for frontend (after API routes)
-if os.path.exists("dist"):
-    app.mount("/", StaticFiles(directory="dist", html=True), name="static")
-elif os.path.exists("../dist"):
-    app.mount("/", StaticFiles(directory="../dist", html=True), name="static")
+# Removed static file mounting - now handled by catch-all route below
 
 @app.get("/")
 async def read_root():
@@ -84,6 +81,22 @@ async def read_root():
     elif os.path.exists("../dist/index.html"):
         return FileResponse("../dist/index.html")
     return {"message": "ClipWave AI Shorts API"}
+
+# Catch-all route for SPA routing - serve index.html for all non-API routes
+@app.get("/{full_path:path}")
+async def catch_all(full_path: str):
+    """Serve index.html for all non-API routes to support SPA routing"""
+    # Don't serve index.html for API routes
+    if full_path.startswith("api/") or full_path.startswith("ws/"):
+        raise HTTPException(status_code=404, detail="Not Found")
+    
+    # Serve index.html for all other routes (SPA routing)
+    if os.path.exists("dist/index.html"):
+        return FileResponse("dist/index.html")
+    elif os.path.exists("../dist/index.html"):
+        return FileResponse("../dist/index.html")
+    else:
+        raise HTTPException(status_code=404, detail="Not Found")
 
 @app.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
