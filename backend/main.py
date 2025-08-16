@@ -33,14 +33,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files directory - try multiple possible locations
-static_dirs = ["../static", "./static", "../dist", "./dist"]
-for static_dir in static_dirs:
-    if os.path.exists(static_dir):
-        app.mount("/static", StaticFiles(directory=static_dir), name="static")
-        print(f"Mounted static files from: {os.path.abspath(static_dir)}")
-        break
-
 # WebSocket connection manager
 class ConnectionManager:
     def __init__(self):
@@ -609,101 +601,6 @@ async def test_simple_download():
     
     return result
 
-@app.get("/api/test-download-strategies")
-async def test_download_strategies():
-    """Test all download strategies systematically"""
-    import subprocess
-    import tempfile
-    import os
-    from pathlib import Path
-    
-    test_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-    
-    strategies = [
-        {
-            "name": "Ultra Minimal",
-            "options": [
-                'yt-dlp',
-                '--format', 'worst',
-                '--quiet',
-                '--output', '/tmp/test_ultra_minimal.mp4',
-                test_url
-            ]
-        },
-        {
-            "name": "Diagnostic Proven",
-            "options": [
-                'yt-dlp', 
-                '--format', 'worst[height<=360]',
-                '--quiet',
-                '--socket-timeout', '30',
-                '--retries', '3',
-                '--no-check-certificate',
-                '--output', '/tmp/test_diagnostic.mp4',
-                test_url
-            ]
-        },
-        {
-            "name": "No Cookies Basic",
-            "options": [
-                'yt-dlp',
-                '--format', 'best[height<=480]',
-                '--no-warnings',
-                '--output', '/tmp/test_no_cookies.mp4',
-                test_url
-            ]
-        }
-    ]
-    
-    results = {}
-    
-    for strategy in strategies:
-        strategy_name = strategy["name"]
-        print(f"Testing strategy: {strategy_name}")
-        
-        result = {
-            "success": False,
-            "file_size": 0,
-            "error": None,
-            "command": ' '.join(strategy["options"])
-        }
-        
-        try:
-            download_result = subprocess.run(
-                strategy["options"], 
-                capture_output=True, 
-                text=True, 
-                timeout=120
-            )
-            
-            output_file = strategy["options"][-2]  # Get output file from command
-            
-            if download_result.returncode == 0 and os.path.exists(output_file):
-                file_size = os.path.getsize(output_file)
-                result["success"] = True
-                result["file_size"] = file_size
-                os.unlink(output_file)  # Clean up
-            else:
-                result["error"] = download_result.stderr[:500] if download_result.stderr else "Unknown error"
-                
-        except subprocess.TimeoutExpired:
-            result["error"] = "Download timed out after 120 seconds"
-        except Exception as e:
-            result["error"] = f"Exception: {str(e)}"
-        
-        results[strategy_name] = result
-    
-    # Summary
-    working_strategies = [name for name, result in results.items() if result["success"]]
-    
-    return {
-        "test_url": test_url,
-        "results": results,
-        "working_strategies": working_strategies,
-        "summary": f"{len(working_strategies)}/{len(strategies)} strategies worked",
-        "recommendation": working_strategies[0] if working_strategies else "All strategies failed - may need different approach"
-    }
-
 @app.get("/api/test-no-cookies")
 async def test_without_cookies():
     """Test download without any cookies to see if they're causing issues"""
@@ -762,73 +659,35 @@ async def test_without_cookies():
 # Serve static assets (CSS, JS files)
 @app.get("/assets/{file_path:path}")
 async def serve_assets(file_path: str):
-    """Serve static assets from static/assets directory"""
-    asset_paths = [
-        f"static/assets/{file_path}",
-        f"../static/assets/{file_path}",
-        f"dist/assets/{file_path}",
-        f"../dist/assets/{file_path}"
-    ]
-    
-    for asset_path in asset_paths:
-        if os.path.exists(asset_path):
-            return FileResponse(asset_path)
-    
-    raise HTTPException(status_code=404, detail="Asset not found")
+    """Serve static assets from dist/assets directory"""
+    if os.path.exists(f"dist/assets/{file_path}"):
+        return FileResponse(f"dist/assets/{file_path}")
+    elif os.path.exists(f"../dist/assets/{file_path}"):
+        return FileResponse(f"../dist/assets/{file_path}")
+    else:
+        raise HTTPException(status_code=404, detail="Asset not found")
 
-# Root route for basic testing
-@app.get("/")
-async def root():
-    """Root endpoint"""
-    return {"message": "ClipWave AI Shorts API", "status": "running", "docs": "/docs"}
-
-# SPA routing - serve index.html for all non-API routes (MUST BE LAST)
+# SPA routing - serve index.html for all non-API routes
 @app.get("/{full_path:path}")
 async def catch_all(full_path: str):
     """Serve index.html for all non-API routes to support SPA routing"""
-    # Explicitly block API routes that should return 404 if not found
+    # Don't serve index.html for API routes
     if full_path.startswith("api/") or full_path.startswith("ws/"):
-        raise HTTPException(status_code=404, detail="API endpoint not found")
+        raise HTTPException(status_code=404, detail="Not Found")
     
-    # Try multiple locations for index.html
-    html_paths = [
-        "static/index.html",
-        "../static/index.html", 
-        "dist/index.html",
-        "../dist/index.html"
-    ]
-    
-    for html_path in html_paths:
-        if os.path.exists(html_path):
-            return FileResponse(html_path)
-    
-    # If no frontend files found, return a simple API info page
-    return {
-        "message": "ClipWave AI Shorts API",
-        "status": "running",
-        "endpoints": {
-            "health": "/api/health",
-            "diagnose": "/api/diagnose",
-            "test_simple": "/api/test-simple",
-            "test_strategies": "/api/test-download-strategies",
-            "docs": "/docs"
-        },
-        "note": "Frontend files not found - API only mode"
-    }
+    # Serve index.html for all other routes (SPA routing)
+    if os.path.exists("dist/index.html"):
+        return FileResponse("dist/index.html")
+    elif os.path.exists("../dist/index.html"):
+        return FileResponse("../dist/index.html")
+    else:
+        raise HTTPException(status_code=404, detail="Not Found")
 
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
     print(f"Starting ClipWave AI Shorts API on port {port}")
     print(f"Current working directory: {os.getcwd()}")
-    print(f"Environment check:")
-    print(f"  - OPENAI_API_KEY: {'✅ Set' if os.getenv('OPENAI_API_KEY') else '❌ Missing'}")
-    print(f"  - YOUTUBE_COOKIES_B64: {'✅ Set' if os.getenv('YOUTUBE_COOKIES_B64') else '❌ Missing'}")
-    print(f"Directory structure:")
-    print(f"  - ./static exists: {os.path.exists('./static')}")
-    print(f"  - ../static exists: {os.path.exists('../static')}")
-    print(f"  - ./dist exists: {os.path.exists('./dist')}")
-    print(f"  - ../dist exists: {os.path.exists('../dist')}")
-    print(f"  - ./storage/videos exists: {os.path.exists('./storage/videos')}")
-    print(f"  - /app/storage/videos exists: {os.path.exists('/app/storage/videos')}")
+    print(f"Dist directory exists: {os.path.exists('dist')}")
+    print(f"../dist directory exists: {os.path.exists('../dist')}")
     uvicorn.run(app, host="0.0.0.0", port=port) 
