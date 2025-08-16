@@ -776,13 +776,19 @@ async def serve_assets(file_path: str):
     
     raise HTTPException(status_code=404, detail="Asset not found")
 
-# SPA routing - serve index.html for all non-API routes
+# Root route for basic testing
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {"message": "ClipWave AI Shorts API", "status": "running", "docs": "/docs"}
+
+# SPA routing - serve index.html for all non-API routes (MUST BE LAST)
 @app.get("/{full_path:path}")
 async def catch_all(full_path: str):
     """Serve index.html for all non-API routes to support SPA routing"""
-    # Don't serve index.html for API routes
+    # Explicitly block API routes that should return 404 if not found
     if full_path.startswith("api/") or full_path.startswith("ws/"):
-        raise HTTPException(status_code=404, detail="Not Found")
+        raise HTTPException(status_code=404, detail="API endpoint not found")
     
     # Try multiple locations for index.html
     html_paths = [
@@ -796,7 +802,19 @@ async def catch_all(full_path: str):
         if os.path.exists(html_path):
             return FileResponse(html_path)
     
-    raise HTTPException(status_code=404, detail="Frontend not found")
+    # If no frontend files found, return a simple API info page
+    return {
+        "message": "ClipWave AI Shorts API",
+        "status": "running",
+        "endpoints": {
+            "health": "/api/health",
+            "diagnose": "/api/diagnose",
+            "test_simple": "/api/test-simple",
+            "test_strategies": "/api/test-download-strategies",
+            "docs": "/docs"
+        },
+        "note": "Frontend files not found - API only mode"
+    }
 
 if __name__ == "__main__":
     import uvicorn
