@@ -609,6 +609,101 @@ async def test_simple_download():
     
     return result
 
+@app.get("/api/test-download-strategies")
+async def test_download_strategies():
+    """Test all download strategies systematically"""
+    import subprocess
+    import tempfile
+    import os
+    from pathlib import Path
+    
+    test_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    
+    strategies = [
+        {
+            "name": "Ultra Minimal",
+            "options": [
+                'yt-dlp',
+                '--format', 'worst',
+                '--quiet',
+                '--output', '/tmp/test_ultra_minimal.mp4',
+                test_url
+            ]
+        },
+        {
+            "name": "Diagnostic Proven",
+            "options": [
+                'yt-dlp', 
+                '--format', 'worst[height<=360]',
+                '--quiet',
+                '--socket-timeout', '30',
+                '--retries', '3',
+                '--no-check-certificate',
+                '--output', '/tmp/test_diagnostic.mp4',
+                test_url
+            ]
+        },
+        {
+            "name": "No Cookies Basic",
+            "options": [
+                'yt-dlp',
+                '--format', 'best[height<=480]',
+                '--no-warnings',
+                '--output', '/tmp/test_no_cookies.mp4',
+                test_url
+            ]
+        }
+    ]
+    
+    results = {}
+    
+    for strategy in strategies:
+        strategy_name = strategy["name"]
+        print(f"Testing strategy: {strategy_name}")
+        
+        result = {
+            "success": False,
+            "file_size": 0,
+            "error": None,
+            "command": ' '.join(strategy["options"])
+        }
+        
+        try:
+            download_result = subprocess.run(
+                strategy["options"], 
+                capture_output=True, 
+                text=True, 
+                timeout=120
+            )
+            
+            output_file = strategy["options"][-2]  # Get output file from command
+            
+            if download_result.returncode == 0 and os.path.exists(output_file):
+                file_size = os.path.getsize(output_file)
+                result["success"] = True
+                result["file_size"] = file_size
+                os.unlink(output_file)  # Clean up
+            else:
+                result["error"] = download_result.stderr[:500] if download_result.stderr else "Unknown error"
+                
+        except subprocess.TimeoutExpired:
+            result["error"] = "Download timed out after 120 seconds"
+        except Exception as e:
+            result["error"] = f"Exception: {str(e)}"
+        
+        results[strategy_name] = result
+    
+    # Summary
+    working_strategies = [name for name, result in results.items() if result["success"]]
+    
+    return {
+        "test_url": test_url,
+        "results": results,
+        "working_strategies": working_strategies,
+        "summary": f"{len(working_strategies)}/{len(strategies)} strategies worked",
+        "recommendation": working_strategies[0] if working_strategies else "All strategies failed - may need different approach"
+    }
+
 @app.get("/api/test-no-cookies")
 async def test_without_cookies():
     """Test download without any cookies to see if they're causing issues"""

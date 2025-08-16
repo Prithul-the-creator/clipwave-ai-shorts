@@ -50,10 +50,10 @@ class VideoProcessor:
     
     def _create_temp_cookies_file(self) -> Optional[str]:
         """Create temporary cookies file from environment variable or file"""
-        # TEMPORARY: Disable cookies to test if they're causing issues
-        disable_cookies = os.getenv("DISABLE_COOKIES", "false").lower() == "true"
+        # Disable cookies by default since diagnostics show they cause issues on Railway
+        disable_cookies = os.getenv("ENABLE_COOKIES", "false").lower() != "true"
         if disable_cookies:
-            print("🍪 Cookies disabled for testing")
+            print("🍪 Cookies disabled (use ENABLE_COOKIES=true to enable)")
             return None
         
         # First try base64 encoded cookies (for deployment)
@@ -201,27 +201,27 @@ class VideoProcessor:
                 print(f"Warning: Could not extract video info: {e}", flush=True)
                 # Continue anyway, might still be able to download
             
-            # Multiple user agents to try
+            # Multiple user agents optimized for Railway/Docker environment
             user_agents = [
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0',
-                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/121.0'
+                'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Mozilla/5.0 (X11; Linux x86_64; rv:123.0) Gecko/20100101 Firefox/123.0',
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0'
             ]
             
-            # Multiple format strategies to try
+            # Railway-optimized format strategies (prioritize smaller, more compatible formats)
             format_strategies = [
-                'best[height<=720]/best',
-                'worst[height<=480]/worst',
-                'best[height<=480]/best',
-                'worst[height<=360]/worst',
-                'best[ext=mp4]/best',
-                'best[ext=webm]/best',
+                'worst[height<=360]',  # Start with smallest for faster, more reliable downloads
+                'worst[height<=480]',
+                'best[height<=480]',
+                'best[height<=720]',
+                'worst',  # Simple fallback
+                'best[ext=mp4]',
                 'best'
             ]
             
-            # Base yt-dlp options
+            # Railway-optimized yt-dlp options
             base_ydl_opts = {
                 'outtmpl': output_path,
                 'merge_output_format': 'mp4',
@@ -232,13 +232,15 @@ class VideoProcessor:
                 'verbose': True,
                 'extract_flat': False,
                 'force_generic_extractor': False,
-                'socket_timeout': 30,
-                'retries': 3,
-                'fragment_retries': 3,
+                'socket_timeout': 60,  # Increased for Railway
+                'retries': 5,  # More retries for Railway
+                'fragment_retries': 5,
                 'skip_unavailable_fragments': True,
                 'keepvideo': False,
                 'writesubtitles': False,
                 'writeautomaticsub': False,
+                'sleep_interval': 1,  # Avoid rate limiting
+                'max_sleep_interval': 3,
                 'postprocessors': [{
                     'key': 'FFmpegVideoConvertor',
                     'preferedformat': 'mp4',
@@ -395,26 +397,46 @@ class VideoProcessor:
                     print(f"Extraction method failed: {e}", flush=True)
                     continue
             
-            # Strategy 5: Try with minimal options (last resort)
-            print("Strategy 5: Trying with minimal options...", flush=True)
+            # Strategy 5: Try with diagnostic-proven minimal options (exact config that worked locally)
+            print("Strategy 5: Trying with diagnostic-proven minimal config...", flush=True)
             try:
                 minimal_opts = {
                     'outtmpl': output_path,
-                    'format': 'best',
-                    'quiet': False,
-                    'no_warnings': False,
-                    'verbose': True,
+                    'format': 'worst[height<=360]',  # Use exact format that worked in diagnostics
+                    'quiet': True,  # Less verbose for Railway
+                    'socket_timeout': 30,
+                    'retries': 3,
+                    'nocheckcertificate': True,
                 }
                 
                 with yt_dlp.YoutubeDL(minimal_opts) as ydl:
                     ydl.download([youtube_url])
                 
                 if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-                    print("Download successful with minimal options", flush=True)
+                    print("Download successful with diagnostic-proven config", flush=True)
                     download_successful = True
                     return
             except Exception as e:
-                print(f"Minimal options failed: {e}", flush=True)
+                print(f"Diagnostic-proven config failed: {e}", flush=True)
+            
+            # Strategy 6: Absolute last resort - ultra minimal
+            print("Strategy 6: Ultra minimal last resort...", flush=True)
+            try:
+                ultra_minimal_opts = {
+                    'outtmpl': output_path,
+                    'format': 'worst',
+                    'quiet': True,
+                }
+                
+                with yt_dlp.YoutubeDL(ultra_minimal_opts) as ydl:
+                    ydl.download([youtube_url])
+                
+                if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                    print("Download successful with ultra minimal config", flush=True)
+                    download_successful = True
+                    return
+            except Exception as e:
+                print(f"Ultra minimal config failed: {e}", flush=True)
             
             # If all strategies failed
             if not download_successful:
