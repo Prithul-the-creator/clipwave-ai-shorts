@@ -27,13 +27,18 @@ COPY index.html ./
 COPY public/ ./public/
 COPY src/ ./src/
 
+# Copy backend files first
+COPY backend/ ./backend/
+COPY requirements-deploy.txt ./backend/
+
 # Install frontend dependencies and build
 RUN npm ci --legacy-peer-deps
 RUN npm run build
 
-# Copy backend files
-COPY backend/ ./backend/
-COPY requirements-deploy.txt ./backend/
+# Ensure backend can access frontend build files
+RUN ls -la dist/ || echo "No dist directory found"
+RUN mkdir -p backend/static
+RUN if [ -d "dist" ]; then cp -r dist/* backend/static/ 2>/dev/null || echo "Failed to copy dist to static"; fi
 
 # Install Python dependencies with CPU-only PyTorch
 RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu

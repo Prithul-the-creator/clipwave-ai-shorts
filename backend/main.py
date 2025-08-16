@@ -33,6 +33,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount static files directory - try multiple possible locations
+static_dirs = ["../static", "./static", "../dist", "./dist"]
+for static_dir in static_dirs:
+    if os.path.exists(static_dir):
+        app.mount("/static", StaticFiles(directory=static_dir), name="static")
+        print(f"Mounted static files from: {os.path.abspath(static_dir)}")
+        break
+
 # WebSocket connection manager
 class ConnectionManager:
     def __init__(self):
@@ -659,13 +667,19 @@ async def test_without_cookies():
 # Serve static assets (CSS, JS files)
 @app.get("/assets/{file_path:path}")
 async def serve_assets(file_path: str):
-    """Serve static assets from dist/assets directory"""
-    if os.path.exists(f"dist/assets/{file_path}"):
-        return FileResponse(f"dist/assets/{file_path}")
-    elif os.path.exists(f"../dist/assets/{file_path}"):
-        return FileResponse(f"../dist/assets/{file_path}")
-    else:
-        raise HTTPException(status_code=404, detail="Asset not found")
+    """Serve static assets from static/assets directory"""
+    asset_paths = [
+        f"static/assets/{file_path}",
+        f"../static/assets/{file_path}",
+        f"dist/assets/{file_path}",
+        f"../dist/assets/{file_path}"
+    ]
+    
+    for asset_path in asset_paths:
+        if os.path.exists(asset_path):
+            return FileResponse(asset_path)
+    
+    raise HTTPException(status_code=404, detail="Asset not found")
 
 # SPA routing - serve index.html for all non-API routes
 @app.get("/{full_path:path}")
@@ -675,19 +689,33 @@ async def catch_all(full_path: str):
     if full_path.startswith("api/") or full_path.startswith("ws/"):
         raise HTTPException(status_code=404, detail="Not Found")
     
-    # Serve index.html for all other routes (SPA routing)
-    if os.path.exists("dist/index.html"):
-        return FileResponse("dist/index.html")
-    elif os.path.exists("../dist/index.html"):
-        return FileResponse("../dist/index.html")
-    else:
-        raise HTTPException(status_code=404, detail="Not Found")
+    # Try multiple locations for index.html
+    html_paths = [
+        "static/index.html",
+        "../static/index.html", 
+        "dist/index.html",
+        "../dist/index.html"
+    ]
+    
+    for html_path in html_paths:
+        if os.path.exists(html_path):
+            return FileResponse(html_path)
+    
+    raise HTTPException(status_code=404, detail="Frontend not found")
 
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
     print(f"Starting ClipWave AI Shorts API on port {port}")
     print(f"Current working directory: {os.getcwd()}")
-    print(f"Dist directory exists: {os.path.exists('dist')}")
-    print(f"../dist directory exists: {os.path.exists('../dist')}")
+    print(f"Environment check:")
+    print(f"  - OPENAI_API_KEY: {'✅ Set' if os.getenv('OPENAI_API_KEY') else '❌ Missing'}")
+    print(f"  - YOUTUBE_COOKIES_B64: {'✅ Set' if os.getenv('YOUTUBE_COOKIES_B64') else '❌ Missing'}")
+    print(f"Directory structure:")
+    print(f"  - ./static exists: {os.path.exists('./static')}")
+    print(f"  - ../static exists: {os.path.exists('../static')}")
+    print(f"  - ./dist exists: {os.path.exists('./dist')}")
+    print(f"  - ../dist exists: {os.path.exists('../dist')}")
+    print(f"  - ./storage/videos exists: {os.path.exists('./storage/videos')}")
+    print(f"  - /app/storage/videos exists: {os.path.exists('/app/storage/videos')}")
     uvicorn.run(app, host="0.0.0.0", port=port) 

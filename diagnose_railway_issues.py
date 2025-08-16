@@ -177,6 +177,7 @@ def test_cookies_effectiveness():
     # Test with cookies
     print("   Testing WITH cookies...")
     cookies_file = None
+    cookies_work = False
     
     # Create temporary cookies file
     if os.getenv('YOUTUBE_COOKIES_B64'):
@@ -219,6 +220,8 @@ def test_cookies_effectiveness():
             os.remove(cookies_file)
         except:
             pass
+    else:
+        print("   ⚠️  No cookies available to test")
     
     # Summary
     print(f"\n📊 Summary:")

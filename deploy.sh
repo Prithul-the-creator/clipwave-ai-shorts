@@ -17,8 +17,8 @@ for file in "${required_files[@]}"; do
         echo "✅ $file"
     else
         echo "❌ $file - Missing!"
-        exit 1
-    fi
+    exit 1
+fi
 done
 
 # Check environment variables
@@ -80,7 +80,7 @@ docker stop clipwave-test
 
 echo ""
 echo "🎉 Deployment preparation complete!"
-echo ""
+    echo ""
 echo "📋 Next steps for Railway deployment:"
 echo "1. Push your code to GitHub:"
 echo "   git add ."
